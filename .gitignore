@@ -42,8 +42,11 @@ tmp/
 temp/
 *.tmp
 
-# ── k6 extracted (from zip) ─────────────────────────
+# ── k6 (压测工具，二进制大文件不进 git) ───────────
+k6/
 k6-extracted/
+*.exe
+*.zip
 
 # ── Prisma temp (migration workdir) ─────────────────
 prisma-temp/
