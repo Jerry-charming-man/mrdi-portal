@@ -38,6 +38,11 @@ jobs:
       - name: Build shared packages
         run: pnpm build:shared
 
+      - name: Generate Prisma clients (custom schema per API)
+        run: |
+          pnpm --filter cimims-api db:generate
+          pnpm --filter cimrms-api db:generate
+
       - name: Type check all workspaces
         run: pnpm typecheck
 
