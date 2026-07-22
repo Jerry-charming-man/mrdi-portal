@@ -113,18 +113,22 @@ jobs:
             type=sha,event=pr,prefix=pr-
             type=raw,value=latest,enable={{ is_default_branch }}
 
-      - name: Prune stale buildkit cache before each build
-        run: docker buildx prune --all --force
+      - name: Prune ALL Docker build caches before each build
+        run: |
+          docker buildx prune --all --force
+          docker builder prune --force || true
 
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILDKIT: "0"
         with:
           context: .
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
-          # No layer cache at all — fresh build every run (avoids stale GHA cache)
+          # No layer cache — fresh build every run
           no-cache: true
           build-args: |
             COMMIT_SHA=${{ github.sha }}
