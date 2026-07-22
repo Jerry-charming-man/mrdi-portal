@@ -18,6 +18,7 @@ COPY packages/shared/tsconfig.json ./packages/shared/tsconfig.json
 COPY tsconfig.base.json ./tsconfig.base.json
 COPY cimims-api/package.json ./cimims-api/
 COPY cimims-api/tsconfig.json ./cimims-api/
+COPY cimims-api/src ./cimims-api/src/
 COPY cimims-api/prisma ./cimims-api/prisma/
 
 # 3. Install all deps
@@ -36,7 +37,7 @@ RUN pnpm --filter cimims-api build
 # ── Runtime stage ────────────────────────────────────────────
 FROM node:22-bullseye AS runner
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 
 # Copy node_modules from builder (flat with shamefully-hoist=true)
 COPY --from=builder /app/node_modules ./node_modules
@@ -50,9 +51,6 @@ RUN echo '{"name":"@mrdi/shared","version":"1.0.0","type":"module","main":"./dis
 
 # Write standalone package.json for cimims-api (prisma in deps for runtime)
 RUN echo '{"name":"cimims-api","version":"1.0.0","type":"module","dependencies":{"@fastify/cors":"^9.0.1","@fastify/jwt":"^8.0.1","@fastify/swagger":"^8.0.0","@fastify/swagger-ui":"^4.0.0","@fastify/websocket":"^10.0.0","@mrdi/shared":"file:./packages/shared","@prisma/client":"^5.22.0","fastify":"^4.28.0","fastify-plugin":"^4.5.1","http-errors":"^2.0.1","pino":"^9.4.0","pino-pretty":"^11.2.0","zod":"^3.23.8"}}' > ./package.json
-
-# Install runtime deps only
-RUN npm install --legacy-peer-deps --omit=dev 2>&1 | tail -3
 
 # Verify PrismaClient
 RUN node -e "const{PrismaClient}=require('@prisma/client');console.log('PrismaClient OK:',typeof PrismaClient)"

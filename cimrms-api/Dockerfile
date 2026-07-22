@@ -1,4 +1,4 @@
-# ============================================================
+ï»¿# ============================================================
 # cimrms-api Dockerfile
 # Strategy: rebuild everything inside Docker (pnpm + prisma generate)
 # Build context: monorepo root (40-Minimax/Portal/)
@@ -23,7 +23,7 @@ COPY cimrms-api/tsconfig.json ./cimrms-api/
 COPY cimrms-api/src ./cimrms-api/src/
 COPY cimrms-api/prisma ./cimrms-api/prisma/
 
-# 3. Install all deps (no workspace protocol — use actual installed packages)
+# 3. Install all deps (no workspace protocol â€” use actual installed packages)
 # shamefully-hoist=true: flat node_modules so COPY to runtime works
 RUN pnpm install --shamefully-hoist=true
 
@@ -39,7 +39,7 @@ RUN pnpm --filter cimrms-api exec prisma generate
 # 7. Build cimrms-api
 RUN pnpm --filter cimrms-api build
 
-# ── Runtime stage ────────────────────────────────────────────
+# â”€â”€ Runtime stage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 FROM node:22-bullseye AS runner
 WORKDIR /app
 ENV NODE_ENV=development
