@@ -14,6 +14,8 @@ RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION:-9.0.0} --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/shared/src ./packages/shared/src/
+COPY packages/shared/tsconfig.json ./packages/shared/tsconfig.json
+COPY tsconfig.base.json ./tsconfig.base.json
 COPY cim-perm/package.json ./cim-perm/
 COPY cim-perm/tsconfig.json ./cim-perm/
 COPY cim-perm/src ./cim-perm/src/
