@@ -35,14 +35,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build all workspace packages
-        run: pnpm -r build
-
-      - name: Generate Prisma clients (all API schemas)
+      - name: Generate Prisma clients first (needed by build/typecheck)
         run: |
           pnpm --filter mdm-api db:generate
           pnpm --filter cimims-api db:generate
           pnpm --filter cimrms-api db:generate
+
+      - name: Build all packages
+        run: pnpm -r build
 
       - name: Type check all workspaces
         run: pnpm typecheck
