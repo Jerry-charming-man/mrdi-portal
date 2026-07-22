@@ -16,7 +16,7 @@ COPY mrdi-portal mrdi-portal/
 RUN pnpm install
 
 # Build shared + ui (needed by mrdi-portal)
-RUN pnpm --filter @mrdi/shared build
+RUN pnpm exec tsc -p packages/shared/tsconfig.json
 RUN pnpm --filter @mrdi/ui build
 
 # Build the portal

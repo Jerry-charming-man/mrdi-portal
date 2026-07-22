@@ -23,8 +23,8 @@ COPY cimims-api/prisma ./cimims-api/prisma/
 # 3. Install all deps
 RUN pnpm install
 
-# 4. Build @mrdi/shared first
-RUN pnpm --filter @mrdi/shared build
+# 4. Build @mrdi/shared first (use pnpm exec tsc for reliable build)
+RUN pnpm exec tsc -p packages/shared/tsconfig.json
 
 # 5. Generate Prisma client for cimims (standard @prisma/client, no custom name)
 RUN pnpm --filter cimims-api db:generate

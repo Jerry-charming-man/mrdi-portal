@@ -23,8 +23,8 @@ COPY cim-perm/src ./cim-perm/src/
 # 3. Install all deps
 RUN pnpm install
 
-# 4. Build @mrdi/shared first
-RUN pnpm --filter @mrdi/shared build
+# 4. Build @mrdi/shared first (use pnpm exec tsc for reliable build)
+RUN pnpm exec tsc -p packages/shared/tsconfig.json
 
 # 5. Build cim-perm-api
 RUN pnpm --filter cim-perm-api build
