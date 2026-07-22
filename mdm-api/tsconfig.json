@@ -1,0 +1,23 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "incremental": true,
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "paths": {
+      "@prisma/client": ["./node_modules/.prisma/client"],
+      "@mrdi/shared": ["../packages/shared/dist"],
+      "@mrdi/shared/errors": ["../packages/shared/dist/errors"],
+      "@mrdi/shared/duration": ["../packages/shared/dist/duration"],
+      "@mrdi/shared/enums": ["../packages/shared/dist/enums"],
+      "@mrdi/shared/mdm-client": ["../packages/shared/dist/mdm-client"],
+      "@mrdi/shared/request-no": ["../packages/shared/dist/request-no"],
+      "@mrdi/shared/permission": ["../packages/shared/dist/permission"],
+      "@mrdi/shared/*": ["../packages/shared/dist/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

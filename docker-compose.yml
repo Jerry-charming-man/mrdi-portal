@@ -1,0 +1,163 @@
+# MRDI Portal 本机开发环境
+# 用法：
+#   # Rebuild images（代码变化后执行）:
+#   docker build -f mdm-api/Dockerfile    -t mrdi/mdm-api:latest    .
+#   docker build -f cimrms-api/Dockerfile  -t mrdi/cimrms-api:latest  .
+#   docker build -f cimims-api/Dockerfile  -t mrdi/cimims-api:latest  .
+#   docker build -f cim-perm/Dockerfile    -t mrdi/cim-perm-api:latest .
+#   # 启动:
+#   docker compose up -d
+#
+# 注意：本机部署优先（Jerry 偏好），验收 OK 再推 vm-jerry-dev-01
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mrdi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mrdi
+      POSTGRES_PASSWORD: mrdi_dev
+      POSTGRES_DB: mrdi
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Master init (creates schemas)
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+      # Per-service schema files (DDL only, no data)
+      - ./cimrms-api/scripts/init-schema.sql:/docker-entrypoint-initdb.d/cimrms-schema.sql:ro
+      - ./cimims-api/scripts/init-schema.sql:/docker-entrypoint-initdb.d/cimims-schema.sql:ro
+      - ./cim-perm/scripts/schema.sql:/docker-entrypoint-initdb.d/cimperm-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mrdi -d mrdi"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mrdi-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ===== mdm-api (port 3000) =====
+  mdm-api:
+    image: mrdi/mdm-api:latest
+    container_name: mdm-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://mrdi:mrdi_dev@postgres:5432/mrdi?schema=mdm
+      PORT: 3000
+      NODE_ENV: development
+      JWT_SECRET: dev-jwt-secret-change-in-production-mrdi-2026
+      JWT_EXPIRES_IN: 8h
+      DEV_LOGIN_ENABLED: "true"
+      ADMIN_KEY: mrdi-dev-admin-key-2026
+      M365_MOCK_ENABLED: "true"
+      LOG_LEVEL: info
+      CORS_ORIGINS: http://localhost:8089,http://localhost:5173
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ===== cimrms-api (port 3001) =====
+  cimrms-api:
+    image: mrdi/cimrms-api:latest
+    container_name: cimrms-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://mrdi:mrdi_dev@postgres:5432/mrdi?schema=cimrms
+      PORT: 3001
+      NODE_ENV: development
+      JWT_SECRET: dev-jwt-secret-change-in-production-mrdi-2026
+      JWT_EXPIRES_IN: 8h
+      DEV_LOGIN_ENABLED: "false"
+      LOG_LEVEL: info
+      CORS_ORIGINS: http://localhost:8089,http://localhost:5173
+      MDM_BASE_URL: http://mdm-api:3000/v1
+      SERVICE_TOKEN: mrdi-dev-service-token-2024
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ===== cimims-api (port 3002) =====
+  cimims-api:
+    image: mrdi/cimims-api:latest
+    container_name: cimims-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://mrdi:mrdi_dev@postgres:5432/mrdi?schema=cimims
+      PORT: 3002
+      NODE_ENV: development
+      JWT_SECRET: dev-jwt-secret-change-in-production-mrdi-2026
+      JWT_EXPIRES_IN: 8h
+      DEV_LOGIN_ENABLED: "false"
+      LOG_LEVEL: info
+      CORS_ORIGINS: http://localhost:8089,http://localhost:5173
+      MDM_BASE_URL: http://mdm-api:3000/v1
+      SERVICE_TOKEN: mrdi-dev-service-token-2024
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ===== cim-perm-api (port 3003) — Fastify migration of cim-perm =====
+  cim-perm-api:
+    image: mrdi/cim-perm-api:latest
+    container_name: cim-perm-api
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: mrdi
+      DB_USER: mrdi
+      DB_PASSWORD: mrdi_dev
+      PORT: 3003
+      NODE_ENV: development
+      JWT_SECRET: dev-jwt-secret-change-in-production-mrdi-2026
+      JWT_EXPIRES_IN: 8h
+      DEV_LOGIN_ENABLED: "false"
+      LOG_LEVEL: info
+      CORS_ORIGINS: http://localhost:8089,http://localhost:5173
+      MDM_API_BASE: http://mdm-api:3000/mdm-api/v1
+      MDM_API_KEY: dev-key-replace-in-prod
+    ports:
+      - "3003:3003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ===== mrdi-portal (port 8089) — React SPA frontend =====
+  mrdi-portal:
+    image: mrdi/mrdi-portal:latest
+    restart: unless-stopped
+    ports:
+      - "8089:80"
+    # No API deps needed — browser calls localhost:3000-3003 directly
+
+volumes:
+  pgdata:
+  redisdata:

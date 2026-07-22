@@ -1,0 +1,13 @@
+# Test Dockerfile that forces context to include dist
+FROM node:22-bullseye AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+# List root context
+RUN echo "=== ROOT DIR ===" && ls -la /
+
+# Copy dist
+COPY cimims-api/dist ./dist
+
+# List what was copied
+RUN echo "=== DIST ROUTES ===" && ls -la /app/dist/routes/ || echo "DIST EMPTY OR NOT FOUND"

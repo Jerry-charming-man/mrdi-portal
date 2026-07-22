@@ -1,0 +1,13 @@
+/**
+ * cimrms-api — server.ts
+ */
+import { loadEnv } from './config/env.js';
+import { buildApp } from './app.js';
+
+const env = loadEnv();
+const app = await buildApp(env);
+const address = await app.listen({ port: env.PORT, host: '0.0.0.0' });
+
+app.log.info(`🚀 CIM-RMS API running on ${address}`);
+app.log.info(`   Health:  ${address}/v1/health`);
+app.log.info(`   Swagger: ${address}/docs`);

@@ -1,0 +1,95 @@
+{
+  "timestamp": "2026-07-17T07:31:51.621Z",
+  "passed": 22,
+  "failed": 0,
+  "results": [
+    {
+      "name": "dev_login without admin_key → 403",
+      "status": "PASS"
+    },
+    {
+      "name": "dev_login with wrong admin_key → 403",
+      "status": "PASS"
+    },
+    {
+      "name": "dev_login with correct admin_key → 200 + JWT",
+      "status": "PASS"
+    },
+    {
+      "name": "GET /m365/mock-users → 3 users",
+      "status": "PASS"
+    },
+    {
+      "name": "authorize generates code",
+      "status": "PASS"
+    },
+    {
+      "name": "callback with valid code → JWT",
+      "status": "PASS"
+    },
+    {
+      "name": "callback with invalid code → 400",
+      "status": "PASS"
+    },
+    {
+      "name": "T5-A: wrong password → 401 AUTH_FAILED",
+      "status": "PASS"
+    },
+    {
+      "name": "T5-B: after admin reset → requirePasswordChange=true + token=null",
+      "status": "PASS"
+    },
+    {
+      "name": "T5-C: correct password → 200 + JWT",
+      "status": "PASS"
+    },
+    {
+      "name": "T5-D: nonexistent user → 401 (no enumeration leak)",
+      "status": "PASS"
+    },
+    {
+      "name": "T6-A: wrong old password → 401",
+      "status": "PASS"
+    },
+    {
+      "name": "T6-B: same as old password → 400",
+      "status": "PASS"
+    },
+    {
+      "name": "T6-C: too short → 400",
+      "status": "PASS"
+    },
+    {
+      "name": "T6-D: no uppercase → 400",
+      "status": "PASS"
+    },
+    {
+      "name": "T6-E: no special char → 400",
+      "status": "PASS"
+    },
+    {
+      "name": "T6-F: valid change-password → 200",
+      "status": "PASS"
+    },
+    {
+      "name": "unlock as non-admin → 403",
+      "status": "PASS"
+    },
+    {
+      "name": "unlock nonexistent user → 404",
+      "status": "PASS"
+    },
+    {
+      "name": "unlock non-locked user → 400",
+      "status": "PASS"
+    },
+    {
+      "name": "admin reset-password → 200",
+      "status": "PASS"
+    },
+    {
+      "name": "admin reset self → 400 (protected)",
+      "status": "PASS"
+    }
+  ]
+}

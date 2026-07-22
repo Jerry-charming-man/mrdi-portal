@@ -1,0 +1,74 @@
+# ── Node.js ──────────────────────────────────────────
+node_modules/
+.pnpm-store/
+
+# ── Build outputs ────────────────────────────────────
+dist/
+build/
+*.tsbuildinfo
+
+# ── Environment ──────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+
+# ── Logs ─────────────────────────────────────────────
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# ── OS ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+._*
+
+# ── IDE ───────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Docker (local dev artifacts) ─────────────────────
+*.tar.gz
+*.tgz
+
+# ── Test coverage ────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── Temporary / dev files ─────────────────────────────
+tmp/
+temp/
+*.tmp
+
+# ── k6 extracted (from zip) ─────────────────────────
+k6-extracted/
+
+# ── Prisma temp (migration workdir) ─────────────────
+prisma-temp/
+
+# ── Backend build artifacts ───────────────────────────
+# 4 个 API 的 dist 不进 git
+mdm-api/dist/
+cimrms-api/dist/
+cimims-api/dist/
+cim-perm/dist/
+
+# ── Prisma (generated files) ─────────────────────────
+# prisma/*.generated.ts
+# prisma/migrations (commit 迁移文件，其他忽略)
+
+# ── Archive / ignore docs ─────────────────────────────
+# 归档文档（已废弃版本）
+archive/
+*.old
+
+# ── Sensitive keys ───────────────────────────────────
+# .pem / .key / .crt（证书文件）
+*.pem
+*.key
+*.crt
+
+# ── CI/CD artifacts ──────────────────────────────────
+.github/scripts/  # 临时 CI 脚本

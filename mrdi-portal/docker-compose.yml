@@ -1,0 +1,7 @@
+services:
+  mrdi-portal:
+    build: .
+    container_name: mrdi-portal
+    ports:
+      - "8089:80"
+    restart: unless-stopped

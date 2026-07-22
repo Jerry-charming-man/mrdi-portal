@@ -1,0 +1,30 @@
+{
+  "name": "mrdi-portal-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MRDI Portal monorepo — mrdi-mdm + cim-rms + cim-ims + cim-perm + portal",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev:mdm": "pnpm --filter mdm-api dev",
+    "dev:cimrms": "pnpm --filter cimrms-api dev",
+    "dev:cimims": "pnpm --filter cimims-api dev",
+    "dev:perm": "pnpm --filter perm-api dev",
+    "dev:portal": "pnpm --filter mrdi-portal dev",
+    "dev:all": "pnpm -r --parallel --filter \"./*-api\" dev",
+    "build:shared": "pnpm --filter @mrdi/shared build",
+    "build:ui": "pnpm --filter @mrdi/ui build",
+    "build:all": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "clean": "pnpm -r exec rm -rf dist node_modules .turbo && pnpm store prune"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "@types/node": "^20.12.0"
+  }
+}

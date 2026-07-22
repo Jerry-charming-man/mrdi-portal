@@ -1,0 +1,466 @@
+openapi: 3.0.3
+info:
+  title: MRDI CIM-PERM API
+  description: CIM 统一权限管理系统（PERM）— 资源级权限申请 / IT 审批 / Owner 审批 / 撤销（Sprint 4）
+  version: 1.0.0
+servers:
+  - url: http://localhost:3003
+    description: Local dev
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Permission Requests
+    description: 权限申请管理（CRUD + 审批流转）
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ── 通用 ──────────────────────────────────────────────────────────────
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+
+    Pagination:
+      type: object
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalPages: { type: integer }
+
+    # ── Permission Request ────────────────────────────────────────────────
+    PermissionRequestStatus:
+      type: string
+      enum:
+        - pending_it_review
+        - it_rejected
+        - pending_owner_review
+        - owner_rejected
+        - approved
+        - active
+        - expired
+        - revoked
+        - withdrawn
+
+    PermissionType:
+      type: string
+      enum: [system_access, functional, data_export, temporary, batch]
+
+    PermissionLevel:
+      type: string
+      enum: [read, write, admin]
+
+    Urgency:
+      type: string
+      enum: [normal, urgent, critical]
+
+    PermissionRequest:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        request_no: { type: string, description: '格式：PERM-{year}-{seq}' }
+        target_system: { type: string }
+        permission_type: { $ref: '#/components/schemas/PermissionType' }
+        permission_level: { $ref: '#/components/schemas/PermissionLevel' }
+        resource_id: { type: string }
+        reason: { type: string }
+        requested_duration: { type: string }
+        urgency: { $ref: '#/components/schemas/Urgency' }
+        related_incident_id: { type: string, nullable: true }
+        related_request_id: { type: string, nullable: true }
+        attachment_ids: { type: array, items: { type: string }, default: [] }
+        status: { $ref: '#/components/schemas/PermissionRequestStatus' }
+        applicant_email: { type: string }
+        applicant_dept: { type: string }
+        applicant_name: { type: string }
+        it_reviewer_email: { type: string, nullable: true }
+        it_reviewed_at: { type: string, format: date-time, nullable: true }
+        it_comment: { type: string, nullable: true }
+        owner_reviewer_email: { type: string, nullable: true }
+        owner_reviewed_at: { type: string, format: date-time, nullable: true }
+        owner_comment: { type: string, nullable: true }
+        revoke_reason: { type: string, nullable: true }
+        revoked_by_email: { type: string, nullable: true }
+        revoked_at: { type: string, format: date-time, nullable: true }
+        expires_at: { type: string, format: date-time, nullable: true }
+        extended_from_id: { type: string, nullable: true }
+        extended_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    PermissionRequestPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            data: { type: array, items: { $ref: '#/components/schemas/PermissionRequest' } }
+
+    PermissionRequestListQuery:
+      type: object
+      properties:
+        status: { type: string }
+        type: { type: string }
+        system: { type: string }
+        applicant: { type: string }
+        search: { type: string }
+        view: { type: string, enum: [all, mine, it_review, owner_review, expiring], default: all }
+        page: { type: integer, default: 1 }
+        pageSize: { type: integer, default: 10 }
+
+    CreatePermissionRequestBody:
+      type: object
+      required: [target_system, permission_type, permission_level, resource_id, reason, requested_duration]
+      properties:
+        target_system: { type: string, minLength: 1, maxLength: 50 }
+        permission_type: { $ref: '#/components/schemas/PermissionType' }
+        permission_level: { $ref: '#/components/schemas/PermissionLevel' }
+        resource_id: { type: string, minLength: 1, maxLength: 255 }
+        reason: { type: string, minLength: 1, maxLength: 5000 }
+        requested_duration: { type: string, minLength: 1, maxLength: 20 }
+        urgency: { $ref: '#/components/schemas/Urgency', default: normal }
+        related_incident_id: { type: string, maxLength: 50 }
+        related_request_id: { type: string, maxLength: 50 }
+        attachment_ids: { type: array, items: { type: string }, default: [] }
+
+    ReviewBody:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [approve, reject] }
+        comment: { type: string, maxLength: 2000 }
+
+    RevokeBody:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+
+    ExtendBody:
+      type: object
+      required: [new_duration]
+      properties:
+        new_duration: { type: string, minLength: 1, maxLength: 20 }
+
+    CommentBody:
+      type: object
+      required: [comment]
+      properties:
+        comment: { type: string, minLength: 1, maxLength: 2000 }
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id: { type: string }
+        request_id: { type: string }
+        event_type: { type: string }
+        actor_email: { type: string }
+        actor_name: { type: string }
+        actor_role: { type: string }
+        action: { type: string }
+        comment: { type: string, nullable: true }
+        metadata: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+
+# ── Paths ────────────────────────────────────────────────────────────────────────
+paths:
+  # ── Permission Requests ─────────────────────────────────────────────────
+  /perm-api/v1/requests:
+    get:
+      tags: [Permission Requests]
+      summary: List permission requests (viewer+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: type
+          schema:
+            type: string
+        - in: query
+          name: system
+          schema:
+            type: string
+        - in: query
+          name: applicant
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: view
+          schema:
+            type: string
+            enum: [all, mine, it_review, owner_review, expiring]
+            default: all
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Request list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionRequestPage'
+    post:
+      tags: [Permission Requests]
+      summary: Create permission request (viewer+)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePermissionRequestBody'
+      responses:
+        '201':
+          description: Request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionRequest'
+        '400':
+          description: Validation error
+
+  /perm-api/v1/requests/{id}:
+    get:
+      tags: [Permission Requests]
+      summary: Get permission request detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Request detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionRequest'
+        '404':
+          description: Not found
+
+  /perm-api/v1/requests/{id}/audit:
+    get:
+      tags: [Permission Requests]
+      summary: Get audit log for request (auditor+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit log
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLogEntry'
+        '403':
+          description: Auditor+ only
+
+  /perm-api/v1/requests/{id}/it-review:
+    post:
+      tags: [Permission Requests]
+      summary: IT reviewer approves/rejects (editor+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewBody'
+      responses:
+        '200':
+          description: IT review complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionRequest'
+        '400':
+          description: Validation error
+        '403':
+          description: Editor+ only
+
+  /perm-api/v1/requests/{id}/owner-review:
+    post:
+      tags: [Permission Requests]
+      summary: Owner approves/rejects (auditor+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewBody'
+      responses:
+        '200':
+          description: Owner review complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionRequest'
+        '400':
+          description: Validation error
+        '403':
+          description: Auditor+ only
+
+  /perm-api/v1/requests/{id}/revoke:
+    post:
+      tags: [Permission Requests]
+      summary: Revoke approved permission (auditor+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeBody'
+      responses:
+        '200':
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionRequest'
+        '400':
+          description: Must provide reason
+
+  /perm-api/v1/requests/{id}/withdraw:
+    post:
+      tags: [Permission Requests]
+      summary: Withdraw own request (viewer+ applicant)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Withdrawn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionRequest'
+        '403':
+          description: Applicant only
+
+  /perm-api/v1/requests/{id}/extend:
+    post:
+      tags: [Permission Requests]
+      summary: Extend approved permission (auditor+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtendBody'
+      responses:
+        '200':
+          description: Extended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionRequest'
+        '400':
+          description: Must provide new_duration
+
+  /perm-api/v1/requests/{id}/comment:
+    post:
+      tags: [Permission Requests]
+      summary: Add comment (viewer+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentBody'
+      responses:
+        '200':
+          description: Comment added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '400':
+          description: Must provide comment

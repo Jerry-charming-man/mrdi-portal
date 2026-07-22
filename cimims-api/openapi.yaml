@@ -1,0 +1,809 @@
+openapi: 3.0.3
+info:
+  title: MRDI CIM-IMS API
+  description: CIM 事件管理系统（IMS）— 报案 → 分级 → 分派 → 处置 → 关闭（Sprint 4）
+  version: 1.0.0
+servers:
+  - url: http://localhost:3002
+    description: Local dev
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+    description: 认证相关（dev-login）
+  - name: Incidents
+    description: 事件管理（CRUD + 状态流转）
+  - name: Dashboard
+    description: 个人 / 值班 / Fab 面板
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ── 通用 ──────────────────────────────────────────────────────────────
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            i18nKey: { type: string }
+
+    Pagination:
+      type: object
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalPages: { type: integer }
+
+    # ── Auth ─────────────────────────────────────────────────────────────
+    DevLoginQuery:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, auditor, engineer, duty, viewer], default: duty }
+        name: { type: string, default: 'Dev User' }
+        department: { type: string, default: IT }
+
+    LoginResponse:
+      type: object
+      properties:
+        token: { type: string }
+        user: { type: object, properties: { email: { type: string }, name: { type: string }, role: { type: string }, department: { type: string } } }
+
+    # ── Incident ─────────────────────────────────────────────────────────
+    IncidentStatus:
+      type: string
+      enum:
+        - pending_takeover
+        - processing
+        - transferred
+        - pending_confirm
+        - closed
+
+    IncidentType:
+      type: string
+      enum: [system, network, account, equipment, other]
+
+    IncidentUrgency:
+      type: string
+      enum: [P1, P2, P3]
+
+    ImpactScope:
+      type: string
+      enum: [user, team, dept, fab]
+
+    Incident:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        incidentNo: { type: string }
+        title: { type: string }
+        description: { type: string }
+        type: { $ref: '#/components/schemas/IncidentType' }
+        urgency: { $ref: '#/components/schemas/IncidentUrgency' }
+        impactScope: { $ref: '#/components/schemas/ImpactScope' }
+        status: { $ref: '#/components/schemas/IncidentStatus' }
+        relatedSystem: { type: string, nullable: true }
+        attachmentIds: { type: array, items: { type: string } }
+        relatedRequestId: { type: string, nullable: true }
+        submitterEmail: { type: string }
+        submitterDept: { type: string }
+        submitterName: { type: string }
+        dutyEngineerEmail: { type: string, nullable: true }
+        dutyEngineerName: { type: string, nullable: true }
+        assignedEngineerEmail: { type: string, nullable: true }
+        assignedEngineerName: { type: string, nullable: true }
+        assignedEngineerType: { type: string, enum: [network, dba, system, security], nullable: true }
+        slaResponseAt: { type: string, format: date-time, nullable: true }
+        slaCloseAt: { type: string, format: date-time }
+        slaCloseBreached: { type: boolean }
+        slaWarnedAt: { type: string, format: date-time, nullable: true }
+        minutesRemaining: { type: integer }
+        rejectCount: { type: integer }
+        resolution: { type: string, nullable: true }
+        closedAt: { type: string, format: date-time, nullable: true }
+        closedByEmail: { type: string, nullable: true }
+        closeReason: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    IncidentPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            data: { type: array, items: { $ref: '#/components/schemas/Incident' } }
+
+    IncidentListQuery:
+      type: object
+      properties:
+        status: { type: string }
+        type: { type: string }
+        urgency: { $ref: '#/components/schemas/IncidentUrgency' }
+        impactScope: { type: string }
+        submitter: { type: string }
+        search: { type: string }
+        view: { type: string, enum: [all, mine, pending_takeover, processing, transferred_to_me, reported_by_me], default: all }
+        page: { type: integer, default: 1 }
+        pageSize: { type: integer, default: 20 }
+
+    CreateIncidentBody:
+      type: object
+      required: [title, description, type, urgency, impactScope]
+      properties:
+        title: { type: string, minLength: 5, maxLength: 200 }
+        description: { type: string, minLength: 10, maxLength: 5000 }
+        type: { $ref: '#/components/schemas/IncidentType' }
+        urgency: { $ref: '#/components/schemas/IncidentUrgency' }
+        impactScope: { $ref: '#/components/schemas/ImpactScope' }
+        relatedSystem: { type: string, maxLength: 100 }
+        attachmentIds: { type: array, items: { type: string, format: uuid }, default: [] }
+        relatedRequestId: { type: string }
+
+    CreateIncidentResponse:
+      type: object
+      properties:
+        id: { type: string }
+        incidentNo: { type: string }
+        status: { type: string }
+        slaResponseAt: { type: string, format: date-time, nullable: true }
+        slaCloseAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    TakeOverBody:
+      type: object
+      properties:
+        handlerType: { type: string, enum: [duty, engineer], default: duty }
+        engineerType: { type: string, enum: [network, dba, system, security] }
+        engineerEmail: { type: string, format: email }
+        comment: { type: string, maxLength: 1000 }
+
+    TransferBody:
+      type: object
+      required: [toEngineerType, toEngineerEmail, reason]
+      properties:
+        toEngineerType: { type: string, enum: [network, dba, system, security] }
+        toEngineerEmail: { type: string, format: email }
+        reason: { type: string, minLength: 5, maxLength: 1000 }
+
+    AddTimelineBody:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1, maxLength: 2000 }
+        isInternal: { type: boolean, default: false }
+        attachmentIds: { type: array, items: { type: string, format: uuid }, default: [] }
+
+    MarkResolvedBody:
+      type: object
+      required: [resolution]
+      properties:
+        resolution: { type: string, minLength: 5, maxLength: 2000 }
+        requireUserConfirm: { type: boolean, default: true }
+        comment: { type: string, maxLength: 1000 }
+
+    RejectBody:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 5, maxLength: 2000 }
+
+    ForceCloseBody:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 10, maxLength: 2000 }
+
+    IncidentTimelineEntry:
+      type: object
+      properties:
+        id: { type: string }
+        incidentId: { type: string }
+        entryType: { type: string }
+        action: { type: string }
+        content: { type: string, nullable: true }
+        actorEmail: { type: string }
+        actorName: { type: string }
+        actorRole: { type: string }
+        fromStatus: { type: string, nullable: true }
+        toStatus: { type: string, nullable: true }
+        isInternal: { type: boolean }
+        attachmentIds: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }
+
+    TimelinePage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            data: { type: array, items: { $ref: '#/components/schemas/IncidentTimelineEntry' } }
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id: { type: string }
+        incidentId: { type: string }
+        eventType: { type: string }
+        actorEmail: { type: string }
+        actorName: { type: string }
+        actorRole: { type: string }
+        afterSnapshot: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+
+    # ── Dashboard ────────────────────────────────────────────────────────
+    MyDashboardResponse:
+      type: object
+      properties:
+        my_reported: { type: object, properties: { total: { type: integer }, open: { type: integer }, closed: { type: integer } } }
+        my_assigned: { type: object, properties: { total: { type: integer }, open: { type: integer }, sla_warning: { type: integer }, sla_breached: { type: integer } } }
+        recent: { type: array, items: { $ref: '#/components/schemas/Incident' } }
+        my_todos: { type: integer }
+
+    DutyDashboardResponse:
+      type: object
+      properties:
+        pending_takeover: { type: object, properties: { total: { type: integer }, p1: { type: integer }, p2: { type: integer }, p3: { type: integer } } }
+        processing: { type: object, properties: { total: { type: integer }, sla_warning: { type: integer }, sla_breached: { type: integer } } }
+        transferred: { type: object, properties: { total: { type: integer }, sla_warning: { type: integer }, sla_breached: { type: integer } } }
+        pending_confirm: { type: object, properties: { total: { type: integer }, sla_warning: { type: integer }, sla_breached: { type: integer } } }
+        type_distribution: { type: array }
+        recent_p1: { type: array, items: { $ref: '#/components/schemas/Incident' } }
+
+    FabDashboardResponse:
+      type: object
+      properties:
+        today: { type: object, properties: { new: { type: integer }, closed: { type: integer }, open: { type: integer } } }
+        this_week: { type: object, properties: { new: { type: integer }, closed: { type: integer }, resolution_rate: { type: number } } }
+        sla_health: { type: object, properties: { warning: { type: integer }, breached: { type: integer }, response_p95_minutes: { type: number }, close_p95_minutes: { type: number } } }
+        top_engineers: { type: array }
+        top_problem_systems: { type: array }
+
+# ── Paths ────────────────────────────────────────────────────────────────────────
+paths:
+  # ── Auth ──────────────────────────────────────────────────────────────
+  /v1/auth/dev/login:
+    get:
+      tags: [Auth]
+      summary: Dev login (GET)
+      parameters:
+        - in: query
+          name: email
+          required: true
+          schema:
+            type: string
+            format: email
+        - in: query
+          name: role
+          schema:
+            type: string
+            enum: [admin, auditor, engineer, duty, viewer]
+            default: duty
+        - in: query
+          name: name
+          schema:
+            type: string
+        - in: query
+          name: department
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dev login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Validation error
+    post:
+      tags: [Auth]
+      summary: Dev login (POST)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevLoginQuery'
+      responses:
+        '200':
+          description: Dev login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Validation error
+
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login (POST)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevLoginQuery'
+      responses:
+        '200':
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Validation error
+
+  # ── Incidents ──────────────────────────────────────────────────────────
+  /v1/incidents:
+    get:
+      tags: [Incidents]
+      summary: List incidents with filters
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: type
+          schema:
+            type: string
+        - in: query
+          name: urgency
+          schema:
+            type: string
+            enum: [P1, P2, P3]
+        - in: query
+          name: impactScope
+          schema:
+            type: string
+        - in: query
+          name: submitter
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: view
+          schema:
+            type: string
+            enum: [all, mine, pending_takeover, processing, transferred_to_me, reported_by_me]
+            default: all
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Incident list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentPage'
+    post:
+      tags: [Incidents]
+      summary: Create incident
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIncidentBody'
+      responses:
+        '201':
+          description: Incident created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateIncidentResponse'
+        '400':
+          description: Validation error
+
+  /v1/incidents/{id}:
+    get:
+      tags: [Incidents]
+      summary: Get incident detail
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Incident detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+        '403':
+          description: No access
+        '404':
+          description: Not found
+
+  /v1/incidents/{id}/timeline:
+    get:
+      tags: [Incidents]
+      summary: Get incident timeline
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 50
+        - in: query
+          name: includeInternal
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Timeline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimelinePage'
+    post:
+      tags: [Incidents]
+      summary: Add timeline entry (note/process)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTimelineBody'
+      responses:
+        '201':
+          description: Entry added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentTimelineEntry'
+
+  /v1/incidents/{id}/take-over:
+    post:
+      tags: [Incidents]
+      summary: Duty engineer takes over incident
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TakeOverBody'
+      responses:
+        '200':
+          description: Taken over
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  assignedEngineerEmail:
+                    type: string
+                    nullable: true
+                  assignedEngineerType:
+                    type: string
+                    nullable: true
+                  dutyEngineerEmail:
+                    type: string
+        '403':
+          description: Duty+ only
+        '409':
+          description: Already taken
+
+  /v1/incidents/{id}/transfer:
+    post:
+      tags: [Incidents]
+      summary: Transfer to another engineer
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferBody'
+      responses:
+        '200':
+          description: Transferred
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  assignedEngineerEmail:
+                    type: string
+                  assignedEngineerType:
+                    type: string
+        '403':
+          description: Duty+ only
+
+  /v1/incidents/{id}/mark-resolved:
+    post:
+      tags: [Incidents]
+      summary: Mark incident as resolved
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkResolvedBody'
+      responses:
+        '200':
+          description: Resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  resolution:
+                    type: string
+                    nullable: true
+                  closedAt:
+                    type: string
+                    nullable: true
+        '403':
+          description: Handler or admin only
+        '409':
+          description: Invalid status
+
+  /v1/incidents/{id}/confirm:
+    post:
+      tags: [Incidents]
+      summary: User confirms resolution and closes
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Confirmed and closed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  closedAt:
+                    type: string
+                  totalDurationMinutes:
+                    type: integer
+        '403':
+          description: Submitter only
+        '409':
+          description: Invalid status
+
+  /v1/incidents/{id}/reject:
+    post:
+      tags: [Incidents]
+      summary: User rejects resolution
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectBody'
+      responses:
+        '200':
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  rejectCount:
+                    type: integer
+        '403':
+          description: Submitter only
+        '409':
+          description: Invalid status
+
+  /v1/incidents/{id}/force-close:
+    post:
+      tags: [Incidents]
+      summary: Admin/auditor force-close incident
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForceCloseBody'
+      responses:
+        '200':
+          description: Force closed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  status:
+                    type: string
+                  closedAt:
+                    type: string
+                  closedByEmail:
+                    type: string
+                  closeReason:
+                    type: string
+        '403':
+          description: Auditor+ only
+
+  /v1/incidents/{id}/audit:
+    get:
+      tags: [Incidents]
+      summary: Get audit log for incident (auditor+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit log
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditLogEntry'
+        '403':
+          description: Auditor+ only
+
+  # ── Dashboard ──────────────────────────────────────────────────────────
+  /v1/dashboard/me:
+    get:
+      tags: [Dashboard]
+      summary: Personal dashboard
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: My dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyDashboardResponse'
+
+  /v1/dashboard/duty:
+    get:
+      tags: [Dashboard]
+      summary: Duty engineer dashboard (duty+)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Duty dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DutyDashboardResponse'
+        '403':
+          description: Duty+ only
+
+  /v1/dashboard/fab:
+    get:
+      tags: [Dashboard]
+      summary: Fab-wide dashboard (auditor+)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Fab dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FabDashboardResponse'
+        '403':
+          description: Auditor+ only

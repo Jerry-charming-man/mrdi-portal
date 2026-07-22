@@ -1,0 +1,137 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "notifications": "Notifications",
+    "cimrms": "CIM-RMS",
+    "cimims": "CIM-IMS",
+    "perm": "Permission Requests",
+    "mdm": "MDM Master Data",
+    "spc": "SPC Trend",
+    "alarms": "Alarm Center",
+    "handover": "Shift Handover"
+  },
+  "header": {
+    "home": "Home",
+    "unknownPage": "Unknown Page",
+    "shift": {
+      "morning": "Morning",
+      "afternoon": "Afternoon",
+      "night": "Night"
+    },
+    "now": "Now",
+    "search": "Search Lot / Equipment / Recipe / Work Order…  ⌘K",
+    "quickActions": "Quick Actions",
+    "quickActionsHint": "Lot Hold",
+    "equipmentCheck": "Equipment Check",
+    "reportRepair": "Report Repair",
+    "notifySupervisor": "Notify Supervisor",
+    "settings": "Settings",
+    "notifications": "Notifications"
+  },
+  "sidebar": {
+    "section": {
+      "overview": "Operations Overview",
+      "business": "Business Systems",
+      "production": "Production Operations"
+    },
+    "plant": "Plant",
+    "plantName": "Fab-1 · MEC",
+    "sprint": "Sprint",
+    "spcPlanned": "SPC Trend coming in Sprint 3",
+    "handoverPlanned": "Shift Handover coming in Sprint 2"
+  },
+  "userMenu": {
+    "switchTheme": "Switch Theme",
+    "accountSettings": "Account Settings",
+    "logout": "Log Out",
+    "loggedOut": "Logged out",
+    "role": {
+      "admin": "Administrator",
+      "auditor": "Auditor",
+      "editor": "Editor",
+      "viewer": "Viewer"
+    }
+  },
+  "login": {
+    "title": "MRDI Smart Portal",
+    "subtitle": "Master Data & Smart Manufacturing Management Platform",
+    "m365Login": "Sign in with Microsoft",
+    "or": "or",
+    "showPasswordLogin": "Sign in with password",
+    "hidePasswordLogin": "Collapse password login",
+    "email": "Email",
+    "password": "Password",
+    "login": "Sign In",
+    "loginFailed": "Login failed",
+    "m365Failed": "M365 login failed",
+    "m365AuthFailed": "M365 authorization failed",
+    "enterCredentials": "Please enter email and password",
+    "devHint": "Test account: jerry.sun@mrdi.org.hk / Jerry1234!"
+  },
+  "theme": {
+    "switchToLight": "Switched to light mode",
+    "switchToDark": "Switched to dark mode"
+  },
+  "shift": {
+    "morning": "Morning",
+    "afternoon": "Afternoon",
+    "night": "Night",
+    "morningRange": "08:00–16:00",
+    "afternoonRange": "16:00–00:00",
+    "nightRange": "00:00–08:00"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all as read",
+    "empty": "No notifications",
+    "loadMore": "Load more"
+  },
+  "profile": {
+    "title": "Profile",
+    "changePassword": "Change Password",
+    "logout": "Log Out"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "loading": "Loading…",
+    "noData": "No data",
+    "success": "Success",
+    "error": "Error",
+    "confirmDelete": "Confirm delete?",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "validation": {
+    "error": "Validation failed",
+    "required": "This field is required",
+    "invalid_type": "Invalid type",
+    "invalid_string": "Invalid format",
+    "invalid_email": "Invalid email format",
+    "string_too_short": "Too short — minimum {{count}} characters",
+    "string_too_long": "Too long — maximum {{count}} characters",
+    "too_small": "Value too small — minimum is {{minimum}}",
+    "too_big": "Value too large — maximum is {{maximum}}",
+    "enum": "Invalid option selected",
+    "custom": "Validation failed"
+  },
+  "error": {
+    "not_found": "Resource not found",
+    "forbidden": "Permission denied",
+    "unauthorized": "Not signed in or session expired",
+    "validation": "Validation failed",
+    "invalid_state_transition": "Invalid state transition",
+    "conflict": "Operation conflict",
+    "internal": "Internal server error",
+    "http_error": "Request failed",
+    "service_unavailable": "Dependent service unavailable",
+    "network_error": "Network connection failed",
+    "timeout": "Request timeout",
+    "unknown": "Unknown error"
+  }
+}

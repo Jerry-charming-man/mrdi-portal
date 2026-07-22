@@ -1,0 +1,908 @@
+openapi: 3.0.3
+info:
+  title: MRDI CIM-RMS API
+  description: CIM 需求管理系统（RMS）— Normal Change 需求工作流 + SPC 统计过程控制（Sprint 4）
+  version: 1.0.0
+servers:
+  - url: http://localhost:3001
+    description: Local dev
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+    description: 认证相关（dev-login / me）
+  - name: Requests
+    description: 需求单管理（CRUD + 状态流转）
+  - name: Dashboard
+    description: 个人/团队 KPI 面板
+  - name: SPC
+    description: 统计过程控制（SPC 控制图）
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ── 通用 ──────────────────────────────────────────────────────────────
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            i18nKey: { type: string }
+
+    Pagination:
+      type: object
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalPages: { type: integer }
+
+    # ── Auth ─────────────────────────────────────────────────────────────
+    DevLoginQuery:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, auditor, editor, viewer], default: editor }
+        name: { type: string, default: 'Dev User' }
+        department: { type: string, default: CIM }
+
+    LoginResponse:
+      type: object
+      properties:
+        token: { type: string }
+        user: { $ref: '#/components/schemas/CurrentUser' }
+
+    CurrentUser:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        role: { type: string, enum: [admin, auditor, editor, viewer] }
+        department: { type: string }
+        teams: { type: array, items: { type: string } }
+
+    # ── Request ───────────────────────────────────────────────────────────
+    RequestStatus:
+      type: string
+      enum:
+        - pending_manager
+        - manager_rejected
+        - pool
+        - scheduled
+        - in_development
+        - pending_uat
+        - pending_deploy
+        - pending_acceptance
+        - closed
+        - cancelled
+
+    RequestUrgency:
+      type: string
+      enum: [P1, P2, P3]
+
+    RequestType:
+      type: string
+      enum: [feature, config, report, integration, other]
+
+    Request:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        requestNo: { type: string }
+        title: { type: string }
+        type: { $ref: '#/components/schemas/RequestType' }
+        urgency: { $ref: '#/components/schemas/RequestUrgency' }
+        status: { $ref: '#/components/schemas/RequestStatus' }
+        relatedSystem: { type: string, nullable: true }
+        description: { type: string }
+        attachmentIds: { type: array, items: { type: string } }
+        relatedIncidentId: { type: string, nullable: true }
+        expectedCompletion: { type: string, format: date-time, nullable: true }
+        submitterEmail: { type: string }
+        submitterDept: { type: string }
+        team: { type: string, nullable: true }
+        estimatedDeployAt: { type: string, format: date-time, nullable: true }
+        assigneeEmail: { type: string, nullable: true }
+        slaPercent: { type: number, description: 'SLA 消耗百分比，超过 100 = 超时' }
+        isOverdue: { type: boolean }
+        statusEnteredAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        closedAt: { type: string, format: date-time, nullable: true }
+
+    RequestPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/Request' } }
+
+    RequestListQuery:
+      type: object
+      properties:
+        status: { type: string }
+        urgency: { $ref: '#/components/schemas/RequestUrgency' }
+        type: { $ref: '#/components/schemas/RequestType' }
+        submitter: { type: string }
+        assignee: { type: string }
+        team: { type: string }
+        search: { type: string }
+        view: { type: string, enum: [all, mine, pending_approval, pending_action, submitted_by_me], default: all }
+        page: { type: integer, default: 1 }
+        pageSize: { type: integer, default: 20 }
+
+    CreateRequestBody:
+      type: object
+      required: [title, type, urgency, description]
+      properties:
+        title: { type: string, minLength: 2, maxLength: 200 }
+        type: { $ref: '#/components/schemas/RequestType' }
+        urgency: { $ref: '#/components/schemas/RequestUrgency' }
+        relatedSystem: { type: string, maxLength: 50 }
+        description: { type: string, minLength: 10, maxLength: 5000 }
+        attachmentIds: { type: array, items: { type: string, format: uuid }, default: [] }
+        relatedIncidentId: { type: string, maxLength: 32 }
+        expectedCompletion: { type: string, format: date-time }
+
+    CreateRequestResponse:
+      type: object
+      properties:
+        id: { type: string }
+        requestNo: { type: string }
+        status: { type: string }
+        submitterEmail: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    TransitionBody:
+      type: object
+      properties:
+        comment: { type: string, maxLength: 2000 }
+
+    ScheduleBody:
+      type: object
+      required: [team, estimatedDeployAt, assigneeEmail]
+      properties:
+        team: { type: string, minLength: 1, maxLength: 50 }
+        estimatedDeployAt: { type: string }
+        assigneeEmail: { type: string, format: email }
+        comment: { type: string, maxLength: 2000 }
+
+    CommentBody:
+      type: object
+      required: [comment]
+      properties:
+        comment: { type: string, minLength: 1, maxLength: 2000 }
+        attachmentIds: { type: array, items: { type: string, format: uuid }, default: [] }
+
+    EscalateBody:
+      type: object
+      required: [reason, escalateToEmail]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+        escalateToEmail: { type: string, format: email }
+
+    RequestEvent:
+      type: object
+      properties:
+        id: { type: string }
+        eventType: { type: string }
+        fromStatus: { type: string, nullable: true }
+        toStatus: { type: string, nullable: true }
+        actorEmail: { type: string }
+        actorRole: { type: string }
+        comment: { type: string, nullable: true }
+        metadata: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+
+    RequestEventPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/RequestEvent' } }
+
+    # ── Dashboard ────────────────────────────────────────────────────────
+    MyDashboardResponse:
+      type: object
+      properties:
+        kpis:
+          type: object
+          properties:
+            myOpenTodos: { type: integer }
+            myPendingApprovals: { type: integer }
+            myInProgressRequests: { type: integer }
+            mySubmittedRequests: { type: integer }
+        myTodos:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              label: { type: string }
+              relatedRequestId: { type: string, nullable: true }
+              requestNo: { type: string, nullable: true }
+              dueAt: { type: string, format: date-time, nullable: true }
+        monthlyTrend:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string }
+              submitted: { type: integer }
+              closed: { type: integer }
+
+    TeamDashboardResponse:
+      type: object
+      properties:
+        kpis:
+          type: object
+          properties:
+            totalRequests: { type: integer }
+            inProgress: { type: integer }
+            pendingUat: { type: integer }
+            pendingAcceptance: { type: integer }
+            overdueCount: { type: integer }
+            warningCount: { type: integer }
+        teamMembers: { type: array, items: { type: object } }
+        urgencyDistribution: { type: array, items: { type: object, properties: { urgency: { type: string }, count: { type: integer } } } }
+        statusDistribution: { type: array, items: { type: object, properties: { status: { type: string }, count: { type: integer } } } }
+        recentRequests: { type: array, items: { type: object } }
+
+    # ── SPC ──────────────────────────────────────────────────────────────
+    SpcTrendQuery:
+      type: object
+      properties:
+        area: { type: string, enum: [Photo, Etch, Diffusion, CMP, WireBond], default: Etch }
+        equipment: { type: string, default: E04 }
+        param: { type: string, enum: [CD, Thickness, Resistance, Voltage, Current], default: CD }
+        points: { type: integer, default: 30, minimum: 10, maximum: 200 }
+
+    SpcTrendResponse:
+      type: object
+      properties:
+        ok: { type: boolean }
+        area: { type: string }
+        equipment: { type: string }
+        param: { type: string }
+        limits:
+          type: object
+          properties:
+            ucl: { type: number }
+            cl: { type: number }
+            lcl: { type: number }
+        total: { type: integer }
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              time: { type: string }
+              value: { type: number }
+              ucl: { type: number }
+              cl: { type: number }
+              lcl: { type: number }
+              ruleViolations: { type: array, items: { type: string } }
+
+# ── Paths ────────────────────────────────────────────────────────────────────────
+paths:
+  # ── Auth ──────────────────────────────────────────────────────────────
+  /v1/auth/dev/login:
+    get:
+      tags: [Auth]
+      summary: Dev login (GET, development only)
+      parameters:
+        - in: query
+          name: email
+          required: true
+          schema:
+            type: string
+            format: email
+        - in: query
+          name: role
+          schema:
+            type: string
+            enum: [admin, auditor, editor, viewer]
+            default: editor
+        - in: query
+          name: name
+          schema:
+            type: string
+        - in: query
+          name: department
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dev login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Validation error
+    post:
+      tags: [Auth]
+      summary: Dev login (POST, SPA compatible)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevLoginQuery'
+      responses:
+        '200':
+          description: Dev login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Validation error
+
+  /v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login alias (POST)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevLoginQuery'
+      responses:
+        '200':
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Validation error
+
+  /v1/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUser'
+
+  # ── Requests ────────────────────────────────────────────────────────────
+  /v1/requests:
+    get:
+      tags: [Requests]
+      summary: List requests with filters
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: urgency
+          schema:
+            type: string
+            enum: [P1, P2, P3]
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [feature, config, report, integration, other]
+        - in: query
+          name: submitter
+          schema:
+            type: string
+        - in: query
+          name: assignee
+          schema:
+            type: string
+        - in: query
+          name: team
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: view
+          schema:
+            type: string
+            enum: [all, mine, pending_approval, pending_action, submitted_by_me]
+            default: all
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Request list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestPage'
+    post:
+      tags: [Requests]
+      summary: Create a new request
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRequestBody'
+      responses:
+        '201':
+          description: Request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateRequestResponse'
+        '400':
+          description: Validation error
+
+  /v1/requests/{id}:
+    get:
+      tags: [Requests]
+      summary: Get request detail with availableActions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Request detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+        '404':
+          description: Not found
+
+  /v1/requests/{id}/events:
+    get:
+      tags: [Requests]
+      summary: Get event timeline for a request
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Event timeline
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestEventPage'
+
+  # 13 transition endpoints
+  /v1/requests/{id}/approve:
+    post:
+      tags: [Requests]
+      summary: Manager approves request (auditor+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionBody'
+      responses:
+        '200':
+          description: Approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  requestNo:
+                    type: string
+                  status:
+                    type: string
+                  updatedAt:
+                    type: string
+
+  /v1/requests/{id}/reject:
+    post:
+      tags: [Requests]
+      summary: Manager rejects request (auditor+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionBody'
+      responses:
+        '200':
+          description: Rejected
+
+  /v1/requests/{id}/resubmit:
+    post:
+      tags: [Requests]
+      summary: Submitter resubmits rejected request
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionBody'
+      responses:
+        '200':
+          description: Resubmitted
+
+  /v1/requests/{id}/schedule:
+    post:
+      tags: [Requests]
+      summary: Assign team and schedule (editor+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleBody'
+      responses:
+        '200':
+          description: Scheduled
+
+  /v1/requests/{id}/dev-start:
+    post:
+      tags: [Requests]
+      summary: Dev team starts development (assignee/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionBody'
+      responses:
+        '200':
+          description: Dev started
+
+  /v1/requests/{id}/dev-complete:
+    post:
+      tags: [Requests]
+      summary: Dev team marks development complete (assignee/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionBody'
+      responses:
+        '200':
+          description: Dev complete
+
+  /v1/requests/{id}/uat-pass:
+    post:
+      tags: [Requests]
+      summary: UAT passes (submitter)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionBody'
+      responses:
+        '200':
+          description: UAT passed
+
+  /v1/requests/{id}/uat-fail:
+    post:
+      tags: [Requests]
+      summary: UAT fails (submitter)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionBody'
+      responses:
+        '200':
+          description: UAT failed
+
+  /v1/requests/{id}/deploy:
+    post:
+      tags: [Requests]
+      summary: Deploy to production (assignee/admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionBody'
+      responses:
+        '200':
+          description: Deployed
+
+  /v1/requests/{id}/accept:
+    post:
+      tags: [Requests]
+      summary: Submitter accepts and closes request
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionBody'
+      responses:
+        '200':
+          description: Accepted and closed
+
+  /v1/requests/{id}/reject-acceptance:
+    post:
+      tags: [Requests]
+      summary: Submitter rejects acceptance
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionBody'
+      responses:
+        '200':
+          description: Acceptance rejected
+
+  /v1/requests/{id}/comment:
+    post:
+      tags: [Requests]
+      summary: Add comment (viewer+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentBody'
+      responses:
+        '200':
+          description: Comment added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  ok:
+                    type: boolean
+
+  /v1/requests/{id}/escalate:
+    post:
+      tags: [Requests]
+      summary: Escalate to manager (editor+)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EscalateBody'
+      responses:
+        '200':
+          description: Escalated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  ok:
+                    type: boolean
+
+  # ── Dashboard ──────────────────────────────────────────────────────────
+  /v1/dashboard/me:
+    get:
+      tags: [Dashboard]
+      summary: Personal dashboard KPIs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Personal dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyDashboardResponse'
+
+  /v1/dashboard/team:
+    get:
+      tags: [Dashboard]
+      summary: Team dashboard (auditor+)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Team dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamDashboardResponse'
+        '403':
+          description: Auditor+ only
+
+  # ── SPC ────────────────────────────────────────────────────────────────
+  /v1/spc/trend:
+    get:
+      tags: [SPC]
+      summary: SPC control chart data
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: area
+          schema:
+            type: string
+            enum: [Photo, Etch, Diffusion, CMP, WireBond]
+            default: Etch
+        - in: query
+          name: equipment
+          schema:
+            type: string
+            default: E04
+        - in: query
+          name: param
+          schema:
+            type: string
+            enum: [CD, Thickness, Resistance, Voltage, Current]
+            default: CD
+        - in: query
+          name: points
+          schema:
+            type: integer
+            default: 30
+      responses:
+        '200':
+          description: SPC trend data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpcTrendResponse'

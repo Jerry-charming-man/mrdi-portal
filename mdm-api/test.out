@@ -1,0 +1,5 @@
+{"level":30,"time":1784128485746,"pid":27280,"hostname":"DESKTOP-4PLSJ8J","msg":"[prisma] connected"}
+{"level":30,"time":1784128485798,"pid":27280,"hostname":"DESKTOP-4PLSJ8J","msg":"Server listening at http://0.0.0.0:3000"}
+{"level":30,"time":1784128485798,"pid":27280,"hostname":"DESKTOP-4PLSJ8J","msg":"🚀 MDM API running on http://0.0.0.0:3000"}
+{"level":30,"time":1784128485798,"pid":27280,"hostname":"DESKTOP-4PLSJ8J","msg":"   Health:  http://0.0.0.0:3000/health"}
+{"level":30,"time":1784128485798,"pid":27280,"hostname":"DESKTOP-4PLSJ8J","msg":"   Swagger: http://0.0.0.0:3000/docs"}

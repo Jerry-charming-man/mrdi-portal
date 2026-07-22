@@ -1,0 +1,11 @@
+packages:
+  - 'packages/*'
+  - 'mdm-api'
+  - 'mdm-web'
+  - 'cimrms-api'
+  - 'cimrms-web'
+  - 'cimims-api'
+  - 'cimims-web'
+  - 'cim-perm'
+  - 'perm-web'
+  - 'mrdi-portal'

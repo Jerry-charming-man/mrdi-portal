@@ -1,0 +1,322 @@
+// MRDI CIM-IMS — Prisma Schema
+// Database: PostgreSQL 16, Schema: cimims
+// 事件（IT 報案 / 工單）API
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/cimims-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== Enums =====
+
+enum IncidentStatus {
+  pending_takeover
+  processing
+  transferred
+  pending_confirm
+  closed
+}
+
+enum IncidentUrgency {
+  P1
+  P2
+  P3
+}
+
+enum IncidentType {
+  system
+  network
+  account
+  equipment
+  other
+}
+
+enum IncidentImpact {
+  user
+  team
+  dept
+  fab
+}
+
+enum EngineerType {
+  network
+  dba
+  system
+  security
+}
+
+enum UserRole {
+  admin
+  auditor
+  engineer
+  duty
+  viewer
+}
+
+enum TimelineEntryType {
+  action
+  note
+  status_change
+  attachment
+  system
+}
+
+enum TimelineAction {
+  create
+  take_over
+  process
+  transfer
+  transfer_back
+  mark_resolved
+  user_confirm_request
+  user_confirm
+  user_reject
+  force_close
+  reopen
+  close
+  link_request
+  sla_50_warning
+  sla_breach
+  comment
+}
+
+enum EscalationReason {
+  sla_50
+  sla_breach
+  manual
+  reopen_loop
+}
+
+enum AuditEventType {
+  status_change
+  create
+  take_over
+  process
+  transfer
+  mark_resolved
+  confirm
+  reject
+  force_close
+  reopen
+  sla_warning
+  sla_breach
+  link_request
+  comment
+  config_change
+}
+
+// ===== Tables =====
+
+model Incident {
+  id                       String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentNo               String         @unique @map("incident_no") @db.VarChar(32)
+
+  title                    String         @db.VarChar(200)
+  description              String
+  type                     IncidentType
+  urgency                  IncidentUrgency
+  impactScope              IncidentImpact @map("impact_scope")
+  relatedSystem            String?        @map("related_system") @db.VarChar(100)
+  attachmentIds            String[]       @map("attachment_ids") @db.Uuid
+
+  status                   IncidentStatus @default(pending_takeover)
+
+  submitterEmail           String         @map("submitter_email") @db.VarChar(255)
+  submitterDept            String         @map("submitter_dept") @db.VarChar(100)
+  submitterName            String?        @map("submitter_name") @db.VarChar(100)
+  dutyEngineerEmail        String?        @map("duty_engineer_email") @db.VarChar(255)
+  dutyEngineerName         String?        @map("duty_engineer_name") @db.VarChar(100)
+  assignedEngineerEmail    String?        @map("assigned_engineer_email") @db.VarChar(255)
+  assignedEngineerName     String?        @map("assigned_engineer_name") @db.VarChar(100)
+  assignedEngineerType     EngineerType?  @map("assigned_engineer_type")
+
+  slaResponseAt            DateTime?      @map("sla_response_at") @db.Timestamptz
+  slaCloseAt               DateTime       @map("sla_close_at") @db.Timestamptz
+  slaResponseBreached      Boolean        @default(false) @map("sla_response_breached")
+  slaCloseBreached         Boolean        @default(false) @map("sla_close_breached")
+  slaWarnedAt              DateTime?      @map("sla_warned_at") @db.Timestamptz
+  slaBreachedAt            DateTime?      @map("sla_breached_at") @db.Timestamptz
+
+  closedAt                 DateTime?      @map("closed_at") @db.Timestamptz
+  closedByEmail            String?        @map("closed_by_email") @db.VarChar(255)
+  closeReason              String?        @map("close_reason")
+
+  relatedRequestId         String?        @map("related_request_id") @db.VarChar(32)
+  resolution               String?
+
+  rejectCount              Int            @default(0) @map("reject_count")
+
+  createdAt                DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  timeline                 IncidentTimeline[]
+  escalations              IncidentEscalation[]
+
+  @@index([status])
+  @@index([type, urgency])
+  @@index([createdAt(sort: Desc)])
+  @@index([slaCloseAt])
+  @@index([submitterEmail])
+  @@index([dutyEngineerEmail])
+  @@index([assignedEngineerEmail])
+  @@map("incidents")
+}
+
+model IncidentTimeline {
+  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId        String      @map("incident_id") @db.Uuid
+  entryType         String      @map("entry_type") @db.VarChar(20)
+  action            String      @db.VarChar(30)
+  actorEmail        String      @map("actor_email") @db.VarChar(255)
+  actorName         String?     @map("actor_name") @db.VarChar(100)
+  actorRole         String      @map("actor_role") @db.VarChar(20)
+  content           String?
+  isInternal        Boolean     @default(false) @map("is_internal")
+  transferToType    String?     @map("transfer_to_type") @db.VarChar(20)
+  transferToEmail   String?     @map("transfer_to_email") @db.VarChar(255)
+  transferToName    String?     @map("transfer_to_name") @db.VarChar(100)
+  fromStatus        String?     @map("from_status") @db.VarChar(30)
+  toStatus          String?     @map("to_status") @db.VarChar(30)
+  attachmentIds     String[]    @map("attachment_ids") @db.Uuid
+  metadata          Json        @default("{}")
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  incident          Incident    @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt(sort: Desc)])
+  @@index([action])
+  @@index([actorEmail])
+  @@map("incident_timeline")
+}
+
+model IncidentEscalation {
+  id                          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId                  String      @map("incident_id") @db.Uuid
+  reason                      String      @db.VarChar(20)
+  fromStatus                  String      @map("from_status") @db.VarChar(30)
+  originalHandlerEmail        String?     @map("original_handler_email") @db.VarChar(255)
+  originalHandlerRole         String?     @map("original_handler_role") @db.VarChar(20)
+  escalatedToEmail            String      @map("escalated_to_email") @db.VarChar(255)
+  escalatedToName             String?     @map("escalated_to_name") @db.VarChar(100)
+  escalatedToRole             String      @map("escalated_to_role") @db.VarChar(20)
+  notifiedEmails              String[]    @map("notified_emails") @db.VarChar(255)
+  slaSnapshot                 Json        @default("{}") @map("sla_snapshot")
+  escalatedAt                 DateTime    @default(now()) @map("escalated_at") @db.Timestamptz
+
+  incident                    Incident    @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, escalatedAt(sort: Desc)])
+  @@index([escalatedToEmail])
+  @@map("incident_escalations")
+}
+
+model AuditLog {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incidentId      String?     @map("incident_id") @db.Uuid
+  eventType       String      @map("event_type") @db.VarChar(30)
+  actorEmail      String      @map("actor_email") @db.VarChar(255)
+  actorName       String?     @map("actor_name") @db.VarChar(100)
+  actorRole       String?     @map("actor_role") @db.VarChar(20)
+  beforeSnapshot  Json?       @map("before_snapshot")
+  afterSnapshot   Json?       @map("after_snapshot")
+  metadata        Json        @default("{}")
+  ipAddress       String?     @map("ip_address") @db.VarChar(45)
+  userAgent       String?     @map("user_agent")
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([incidentId, createdAt(sort: Desc)])
+  @@index([actorEmail, createdAt(sort: Desc)])
+  @@index([eventType, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model SlaConfig {
+  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type                String      @db.VarChar(20)
+  urgency             String      @db.VarChar(4)
+  responseMinutes     Int?        @map("response_minutes")
+  closeMinutes        Int         @map("close_minutes")
+  warnAtPercent       Int         @default(50) @map("warn_at_percent")
+  isActive            Boolean     @default(true) @map("is_active")
+  updatedByEmail      String?     @map("updated_by_email") @db.VarChar(255)
+  updatedAt           DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([type, urgency])
+  @@map("sla_configs")
+}
+
+model EscalationRule {
+  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  triggerType         String      @map("trigger_type") @db.VarChar(20)
+  triggerUrgency      String?     @map("trigger_urgency") @db.VarChar(4)
+  triggerImpact       String?     @map("trigger_impact") @db.VarChar(10)
+  escalateToRole      String      @map("escalate_to_role") @db.VarChar(20)
+  escalateToEmail     String?     @map("escalate_to_email") @db.VarChar(255)
+  notifyChannels      String[]    @map("notify_channels") @db.VarChar(20)
+  notifySubmitter     Boolean     @default(true) @map("notify_submitter")
+  ccEmails            String[]    @map("cc_emails") @db.VarChar(255)
+  templateKey         String      @map("template_key") @db.VarChar(100)
+  isActive            Boolean     @default(true) @map("is_active")
+  priority            Int         @default(100)
+  updatedByEmail      String?     @map("updated_by_email") @db.VarChar(255)
+  updatedAt           DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("escalation_rules")
+}
+
+model DutyRoster {
+  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dutyEmail           String      @map("duty_email") @db.VarChar(255)
+  dutyName            String?     @map("duty_name") @db.VarChar(100)
+  dutyRole            String      @default("duty") @map("duty_role") @db.VarChar(20)
+  shift               String      @db.VarChar(10)
+  shiftStart          String      @map("shift_start") @db.VarChar(8)
+  shiftEnd            String      @map("shift_end") @db.VarChar(8)
+  effectiveDate       DateTime    @map("effective_date") @db.Date
+  effectiveUntil      DateTime?   @map("effective_until") @db.Date
+  backupEmail         String?     @map("backup_email") @db.VarChar(255)
+  backupName          String?     @map("backup_name") @db.VarChar(100)
+  isActive            Boolean     @default(true) @map("is_active")
+  note                String?
+  createdByEmail      String?     @map("created_by_email") @db.VarChar(255)
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([dutyEmail])
+  @@map("duty_roster")
+}
+
+model EngineerMember {
+  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  engineerEmail       String      @unique @map("engineer_email") @db.VarChar(255)
+  engineerName        String?     @map("engineer_name") @db.VarChar(100)
+  engineerType        String      @map("engineer_type") @db.VarChar(20)
+  team                String      @db.VarChar(100)
+  phone               String?     @db.VarChar(20)
+  slackId             String?     @map("slack_id") @db.VarChar(50)
+  isAvailable         Boolean     @default(true) @map("is_available")
+  currentLoad         Int         @default(0) @map("current_load")
+  skillLevel          String?     @default("L2") @map("skill_level") @db.VarChar(20)
+  specializations     String[]
+  joinedAt            DateTime    @default(dbgenerated("CURRENT_DATE")) @map("joined_at") @db.Date
+  leftAt              DateTime?   @map("left_at") @db.Date
+  isActive            Boolean     @default(true) @map("is_active")
+  updatedAt           DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("engineer_members")
+}
+
+/// 业务编号计数器
+model IncidentNoSeq {
+  year          Int      @id
+  prefix        String   @db.VarChar(8)
+  currentValue  Int      @default(0) @map("current_value")
+
+  @@map("incident_no_seq")
+}

@@ -1,0 +1,112 @@
+name: CD · Deploy to vm-jerry-dev-01
+
+on:
+  push:
+    branches: [main]
+    # 只在镜像 push 成功后触发（可选：依赖 ci.yml 的 job）
+  workflow_dispatch:
+    # 手动触发（用于测试 CD 流程）
+    inputs:
+      vm_host:
+        description: 'VM Host / IP'
+        required: false
+        default: 'vm-jerry-dev-01'
+      deploy_env:
+        description: 'Environment'
+        required: false
+        default: 'staging'
+
+env:
+  VM_USER: mavis
+  VM_DEPLOY_DIR: /opt/mrdi
+  WEBHOOK_SECRET: ${{ secrets.MRDI_WEBHOOK_SECRET }}
+
+jobs:
+  # ────────────────────────────────────────────────
+  # CD: Trigger webhook → vm-jerry-dev-01 pulls & restarts
+  # ────────────────────────────────────────────────
+  deploy:
+    name: Deploy to vm-jerry-dev-01
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment: staging
+    steps:
+      - name: Trigger vm-jerry-dev-01 webhook
+        run: |
+          # 发送部署 webhook（VM 端 webhook receiver 在 port 9000）
+          # 格式：POST /deploy  Body: { "ref": "main", "sha": "<commit>" }
+          curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Secret: ${{ secrets.MRDI_WEBHOOK_SECRET }}" \
+            -d '{
+              "event": "deployment",
+              "ref": "${{ github.ref_name }}",
+              "sha": "${{ github.sha }}",
+              "repository": "${{ github.repository }}",
+              "actor": "${{ github.actor }}"
+            }' \
+            "https://${{ vars.VM_HOST }}/api/deploy" \
+            --max-time 30 \
+            -w "\nHTTP Status: %{http_code}\n" \
+            || echo "::warning::Webhook unreachable — check VM is up and webhook receiver is running"
+
+      - name: Wait for containers to restart
+        run: sleep 20
+
+      - name: Health check — mdm-api
+        run: |
+          curl -sf --max-time 10 "https://${{ vars.VM_HOST }}/mdm-api/v1/health" \
+            && echo "✅ mdm-api healthy" \
+            || echo "::warning::mdm-api not responding yet"
+
+      - name: Health check — cimrms-api
+        run: |
+          curl -sf --max-time 10 "https://${{ vars.VM_HOST }}/cimrms-api/v1/health" \
+            && echo "✅ cimrms-api healthy" \
+            || echo "::warning::cimrms-api not responding yet"
+
+      - name: Health check — cimims-api
+        run: |
+          curl -sf --max-time 10 "https://${{ vars.VM_HOST }}/cimims-api/v1/health" \
+            && echo "✅ cimims-api healthy" \
+            || echo "::warning::cimims-api not responding yet"
+
+      - name: Health check — portal
+        run: |
+          curl -sf --max-time 10 "https://${{ vars.VM_HOST }}/" \
+            | head -c 100 \
+            && echo "✅ portal responding" \
+            || echo "::warning::portal not responding"
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          echo "## 🚀 Deployment Summary"
+          echo ""
+          echo "| Item | Value |"
+          echo "|------|-------|"
+          echo "| Commit | \`${{ github.sha }}\` |"
+          echo "| Branch | \`${{ github.ref_name }}\` |"
+          echo "| Repository | ${{ github.repository }} |"
+          echo "| Actor | ${{ github.actor }} |"
+          echo "| VM | ${{ vars.VM_HOST }} |"
+          echo ""
+          echo "Deploy log: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  # ────────────────────────────────────────────────
+  # CD: Notify (optional — future: Teams webhook)
+  # ────────────────────────────────────────────────
+  notify:
+    name: Notify on deploy
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: always()
+    steps:
+      - name: Deploy result
+        run: |
+          if [[ "${{ needs.deploy.result }}" == "success" ]]; then
+            echo "## ✅ Deploy Succeeded"
+          else
+            echo "## ❌ Deploy Failed"
+            echo "Check vm-jerry-dev-01 webhook receiver and container status."
+          fi

@@ -1,0 +1,971 @@
+openapi: 3.0.3
+info:
+  title: MRDI MDM API
+  description: 'MRDI 主数据管理 + 统一权限授权 API（Sprint 4）'
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: Local dev
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+    description: 认证相关（dev-login / login / m365-mock）
+  - name: Users
+    description: 用户管理
+  - name: Roles
+    description: 角色管理
+  - name: Permissions
+    description: 资源级权限授予 / 撤销
+  - name: Notifications
+    description: 通知中心
+  - name: Systems
+    description: 系统配置
+  - name: Todos
+    description: 待办事项
+  - name: Audit
+    description: 跨服务审计聚合（S4-3）
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # ── 通用 ──────────────────────────────────────────────────────────────
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            i18nKey: { type: string }
+
+    Pagination:
+      type: object
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalPages: { type: integer }
+
+    # ── User ──────────────────────────────────────────────────────────────
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        department: { type: string }
+        global_role: { type: string, enum: [admin, auditor, editor, viewer] }
+        status: { type: string, enum: [active, suspended] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    UserPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/User'
+
+    CreateUserBody:
+      type: object
+      required: [email, name, department]
+      properties:
+        email: { type: string, format: email }
+        name: { type: string }
+        department: { type: string }
+        global_role: { type: string, enum: [admin, auditor, editor, viewer], default: viewer }
+        password: { type: string, minLength: 12 }
+
+    UpdateUserBody:
+      type: object
+      properties:
+        name: { type: string }
+        department: { type: string }
+        global_role: { type: string, enum: [admin, auditor, editor, viewer] }
+        status: { type: string, enum: [active, suspended] }
+
+    # ── Role ─────────────────────────────────────────────────────────────
+    Role:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        permissions:
+          type: array
+          items:
+            type: string
+        created_at: { type: string, format: date-time }
+
+    # ── System ────────────────────────────────────────────────────────────
+    System:
+      type: object
+      properties:
+        id: { type: string }
+        code: { type: string }
+        name: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [active, inactive] }
+        created_at: { type: string, format: date-time }
+
+    CreateSystemBody:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        description: { type: string }
+
+    # ── Permission ────────────────────────────────────────────────────────
+    PermissionGrant:
+      type: object
+      properties:
+        grant_id: { type: string }
+        user_email: { type: string }
+        resource_id: { type: string }
+        permission: { type: string }
+        granted_by: { type: string }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    GrantPermissionBody:
+      type: object
+      required: [user_email, resource_id, permission]
+      properties:
+        user_email: { type: string }
+        resource_id: { type: string }
+        permission: { type: string }
+        expires_at: { type: string, format: date-time }
+
+    RevokePermissionBody:
+      type: object
+      required: [grant_id]
+      properties:
+        grant_id: { type: string }
+
+    # ── Notification ─────────────────────────────────────────────────────
+    Notification:
+      type: object
+      properties:
+        id: { type: string }
+        recipient_email: { type: string }
+        type: { type: string }
+        title: { type: string }
+        body: { type: string }
+        read: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    NotificationPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Notification'
+
+    # ── Todo ─────────────────────────────────────────────────────────────
+    Todo:
+      type: object
+      properties:
+        id: { type: string }
+        assignee_email: { type: string }
+        title: { type: string }
+        description: { type: string }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        due_date: { type: string, format: date-time }
+        completed: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    CreateTodoBody:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        priority: { type: string, enum: [low, medium, high, urgent], default: medium }
+        due_date: { type: string, format: date-time }
+        assignee_email: { type: string }
+
+    UpdateTodoBody:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: string }
+        priority: { type: string, enum: [low, medium, high, urgent] }
+        due_date: { type: string, format: date-time }
+        completed: { type: boolean }
+
+    # ── Audit ────────────────────────────────────────────────────────────
+    AuditLog:
+      type: object
+      properties:
+        id: { type: string }
+        system: { type: string }
+        action: { type: string }
+        actor_email: { type: string }
+        actor_name: { type: string }
+        target_email: { type: string }
+        target_type: { type: string }
+        target_id: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+
+    AuditPage:
+      allOf:
+        - $ref: '#/components/schemas/Pagination'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuditLog'
+
+    AuditQuery:
+      type: object
+      properties:
+        system: { type: string, description: '来源系统: mdm / cimrms / cimims / cim-perm' }
+        action: { type: string }
+        actor: { type: string, description: '操作人 email' }
+        target: { type: string, description: '目标 email 或 ID' }
+        dateFrom: { type: string, format: date }
+        dateTo: { type: string, format: date }
+        page: { type: integer, default: 1 }
+        pageSize: { type: integer, default: 20 }
+
+    AuditEventBody:
+      type: object
+      required: [action, actor_email]
+      properties:
+        action: { type: string, description: '操作类型，如 request.approve / incident.takeover' }
+        actor_email: { type: string }
+        actor_name: { type: string }
+        target_email: { type: string }
+        target_type: { type: string }
+        target_id: { type: string }
+        metadata: { type: object, additionalProperties: true }
+
+    # ── Auth ─────────────────────────────────────────────────────────────
+    LoginBody:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    LoginResponse:
+      type: object
+      properties:
+        token: { type: string }
+        user: { $ref: '#/components/schemas/User' }
+
+    ChangePasswordBody:
+      type: object
+      required: [oldPassword, newPassword]
+      properties:
+        oldPassword: { type: string }
+        newPassword: { type: string, minLength: 12 }
+
+    UnlockBody:
+      type: object
+      properties:
+        message: { type: string }
+
+    AdminResetBody:
+      type: object
+      required: [targetEmail, newPassword]
+      properties:
+        targetEmail: { type: string, format: email }
+        newPassword: { type: string, minLength: 12 }
+
+# ── Paths ───────────────────────────────────────────────────────────────────────
+paths:
+  # ── Auth ──────────────────────────────────────────────────────────────
+  /auth/v1/dev/login:
+    get:
+      tags: [Auth]
+      summary: Dev login (development only)
+      operationId: getAuthV1DevLogin
+      parameters:
+        - in: query
+          name: email
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: role
+          schema:
+            type: string
+            enum: [admin, auditor, editor, viewer]
+            default: editor
+        - in: query
+          name: name
+          schema:
+            type: string
+        - in: query
+          name: department
+          schema:
+            type: string
+        - in: query
+          name: admin_key
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dev login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '403':
+          description: Dev login disabled or wrong admin_key
+
+  /auth/v1/login:
+    post:
+      tags: [Auth]
+      summary: Password login
+      operationId: postAuthV1Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginBody'
+      responses:
+        '200':
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '423':
+          description: Account locked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/v1/change-password:
+    post:
+      tags: [Auth]
+      summary: Change own password
+      operationId: postAuthV1ChangePassword
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordBody'
+      responses:
+        '200':
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  token:
+                    type: string
+        '400':
+          description: Validation error
+        '401':
+          description: Wrong old password
+
+  /auth/v1/unlock/{email}:
+    post:
+      tags: [Auth]
+      summary: Admin unlock user account
+      operationId: postAuthV1UnlockByEmail
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: email
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account unlocked
+        '403':
+          description: Admin only
+        '404':
+          description: User not found
+
+  /auth/v1/admin/reset-password:
+    post:
+      tags: [Auth]
+      summary: Admin reset user password (force must-change)
+      operationId: postAuthV1AdminResetPassword
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminResetBody'
+      responses:
+        '200':
+          description: Password reset
+        '403':
+          description: Admin only
+        '404':
+          description: User not found
+
+  # ── Users ──────────────────────────────────────────────────────────────
+  /v1/users:
+    get:
+      tags: [Users]
+      summary: List users (admin only)
+      operationId: getV1Users
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: role
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: User list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+    post:
+      tags: [Users]
+      summary: Create user (admin only)
+      operationId: postV1Users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserBody'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /v1/users/me:
+    get:
+      tags: [Users]
+      summary: Get current user
+      operationId: getV1UsersMe
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /v1/users/{id}:
+    get:
+      tags: [Users]
+      summary: Get user by ID
+      operationId: getV1UsersById
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: Not found
+    put:
+      tags: [Users]
+      summary: Update user
+      operationId: putV1UsersById
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserBody'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+    delete:
+      tags: [Users]
+      summary: Soft-delete user
+      operationId: deleteV1UsersById
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User deleted
+
+  # ── Roles ──────────────────────────────────────────────────────────────
+  /v1/roles:
+    get:
+      tags: [Roles]
+      summary: List roles
+      operationId: getV1Roles
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Roles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Role'
+    post:
+      tags: [Roles]
+      summary: Create role (admin only)
+      operationId: postV1Roles
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Role created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+
+  /v1/roles/assign:
+    post:
+      tags: [Roles]
+      summary: Assign role to user (admin only)
+      operationId: postV1RolesAssign
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_email:
+                  type: string
+                role:
+                  type: string
+      responses:
+        '200':
+          description: Role assigned
+
+  # ── Permissions ────────────────────────────────────────────────────────
+  /v1/permissions/check:
+    get:
+      tags: [Permissions]
+      summary: Check user permission for a resource
+      operationId: getV1PermissionsCheck
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: user_email
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: resource_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: action
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Permission check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  allowed:
+                    type: boolean
+                  permissions:
+                    type: array
+                    items:
+                      type: string
+
+  /v1/permissions/grant:
+    post:
+      tags: [Permissions]
+      summary: Grant permission to user
+      operationId: postV1PermissionsGrant
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantPermissionBody'
+      responses:
+        '201':
+          description: Permission granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionGrant'
+
+  /v1/permissions/revoke:
+    post:
+      tags: [Permissions]
+      summary: Revoke permission grant
+      operationId: postV1PermissionsRevoke
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokePermissionBody'
+      responses:
+        '200':
+          description: Permission revoked
+
+  # ── Systems ─────────────────────────────────────────────────────────────
+  /v1/systems:
+    get:
+      tags: [Systems]
+      summary: List systems
+      operationId: getV1Systems
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Systems
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/System'
+    post:
+      tags: [Systems]
+      summary: Create system
+      operationId: postV1Systems
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSystemBody'
+      responses:
+        '201':
+          description: System created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/System'
+
+  /v1/systems/{id}:
+    put:
+      tags: [Systems]
+      summary: Update system
+      operationId: putV1SystemsById
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSystemBody'
+      responses:
+        '200':
+          description: System updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/System'
+
+  # ── Todos ──────────────────────────────────────────────────────────────
+  /v1/todos:
+    get:
+      tags: [Todos]
+      summary: List todos
+      operationId: getV1Todos
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: assignee
+          schema:
+            type: string
+        - in: query
+          name: completed
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Todos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Todo'
+    post:
+      tags: [Todos]
+      summary: Create todo
+      operationId: postV1Todos
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTodoBody'
+      responses:
+        '201':
+          description: Todo created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Todo'
+
+  /v1/todos/{id}:
+    put:
+      tags: [Todos]
+      summary: Update todo
+      operationId: putV1TodosById
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTodoBody'
+      responses:
+        '200':
+          description: Todo updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Todo'
+
+  # ── Notifications ───────────────────────────────────────────────────────
+  /v1/notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications for current user
+      operationId: getV1Notifications
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPage'
+
+  /v1/notifications/{id}:
+    put:
+      tags: [Notifications]
+      summary: Mark notification as read
+      operationId: putV1NotificationsById
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Notification updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+
+  # ── Audit ────────────────────────────────────────────────────────────────
+  /v1/audit:
+    get:
+      tags: [Audit]
+      summary: Query audit logs
+      operationId: getV1Audit
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: system
+          schema:
+            type: string
+        - in: query
+          name: action
+          schema:
+            type: string
+        - in: query
+          name: actor
+          schema:
+            type: string
+        - in: query
+          name: target
+          schema:
+            type: string
+        - in: query
+          name: dateFrom
+          schema:
+            type: string
+        - in: query
+          name: dateTo
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: pageSize
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+
+  /v1/audit/events:
+    post:
+      tags: [Audit]
+      summary: Write audit event (service-to-service, requires SERVICE_TOKEN)
+      operationId: postV1AuditEvents
+      parameters:
+        - in: header
+          name: X-Service-Token
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditEventBody'
+      responses:
+        '201':
+          description: Audit event written
+        '401':
+          description: Invalid service token

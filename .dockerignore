@@ -1,0 +1,29 @@
+# Exclude all node_modules from monorepo root
+node_modules/
+
+# BUT re-include mdm-api/node_modules (needed by mdm-api Dockerfile for runtime deps)
+!mdm-api/node_modules/
+
+# Exclude local dist (mdm-api's working dist from tsconfig builds)
+# BUT keep packages/shared/dist (needed as build input for other services)
+**/.tsbuildinfo
+
+# Exclude pnpm store
+.pnpm-store/
+
+# Exclude OS files
+.DS_Store
+Thumbs.db
+
+# Exclude git
+.git/
+.gitignore
+
+# Exclude design docs (not needed in Docker)
+**/*.md
+**/*.html
+**/visual-assets/
+
+# Exclude scripts (not needed in Docker)
+scripts/
+

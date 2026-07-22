@@ -1,0 +1,281 @@
+// MRDI MDM — Prisma Schema
+// Database: PostgreSQL 16, Schema: mdm
+// 所有表用软删除（deleted_at），审计表不删
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== Enums =====
+
+enum MdmRole {
+  mdm_admin
+  mdm_editor
+  mdm_viewer
+  mdm_auditor
+}
+
+enum GlobalRole {
+  admin
+  auditor
+  editor
+  viewer
+}
+
+enum UserStatus {
+  active
+  suspended
+}
+
+enum SystemStatus {
+  active
+  suspended
+}
+
+enum GrantStatus {
+  active
+  revoked
+}
+
+enum GrantVia {
+  manual
+  auto
+}
+
+enum TodoLabel {
+  red
+  green
+  blue
+}
+
+enum TodoStatus {
+  open
+  done
+  dismissed
+}
+
+// ===== Users（MDM 独立管理，不接外部 IdP）=====
+
+model User {
+  id         String      @id @default(uuid())
+  email      String      @unique
+  name       String
+  department String      @default("")
+  status     UserStatus @default(active)
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
+  deleted_at DateTime?
+
+  // 全局角色（MDM 分配）
+  global_role GlobalRole @default(viewer)
+
+  // ── 密码字段（ADR-0005 · Sprint 2）──────────────────────────
+  password_hash         String?   // bcrypt hash (cost=12); null = 未设密码
+  password_changed_at   DateTime? // 上次改密时间（用于 90 天过期判断）
+  password_expires_at   DateTime? // 密码到期时间；登录时校验
+  failed_login_count    Int       @default(0) // 连续失败次数；5 次锁 15 分钟
+  locked_until          DateTime? // 账号锁定截止时间
+  must_change_password  Boolean   @default(false) // 首次登录 / admin 重置后置 true
+  password_history      String[]  // 最近 5 次密码哈希；禁止重用
+  // ───────────────────────────────────────────────────────────
+
+  // 主管关系
+  manager_id        String?
+  manager           User?     @relation("ManagerRelation", fields: [manager_id], references: [id])
+  subordinates      User[]    @relation("ManagerRelation")
+
+  // 关联
+  roles             UserRoleAssignment[]
+  permission_grants PermissionGrant[]  @relation("Grantee")
+  granted_by       PermissionGrant[]  @relation("Granter")
+
+  audit_logs        AuditLog[]
+  todos             Todo[]
+  sessions          Session[]
+  notifications     Notification[]     @relation("NotificationRecipient")
+
+  @@map("User")
+  @@index([email])
+  @@index([department])
+  @@index([manager_id])
+}
+
+// ===== Global Role Assignment =====
+
+model UserRoleAssignment {
+  id           String   @id @default(uuid())
+  user_id     String
+  global_role  GlobalRole
+  granted_by   String
+  note         String?
+  created_at   DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("UserRoleAssignment")
+  @@unique([user_id])
+  @@index([user_id])
+}
+
+// ===== Registered Systems（业务系统注册）=====
+
+model RegisteredSystem {
+  id          String       @id @default(uuid())
+  system_id   String       @unique  // "cim-rms" / "cim-ims" / "mrdi-portal" ...
+  name        String                  // 中文名 "CIM 需求管理"
+  description String?
+  api_base_url String
+  allowed_roles GlobalRole[]
+  created_by  String
+  created_at  DateTime    @default(now())
+  updated_at  DateTime    @updatedAt
+  status      SystemStatus @default(active)
+
+  api_keys ApiKey[]
+
+  @@map("RegisteredSystem")
+  @@index([system_id])
+}
+
+// ===== API Key =====
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  system_id   String
+  key_hash    String   @unique  // SHA-256 哈希
+  prefix      String            // 展示用: "mdm_api_rms_v1_••••"
+  expires_at  DateTime?
+  created_at  DateTime  @default(now())
+  revoked_at  DateTime?
+
+  system RegisteredSystem @relation(fields: [system_id], references: [id], onDelete: Cascade)
+
+  @@map("ApiKey")
+  @@index([key_hash])
+  @@index([system_id])
+}
+
+// ===== Permission Grant（资源级临时授权）=====
+
+model PermissionGrant {
+  id              String     @id @default(uuid())
+  user_email      String
+  resource_id     String              // "eq:E02" / "recipe:R-Photo-PR01" ...
+  permission_id   String              // "eq:pm-write" / "system:admin" ...
+  granted_via     GrantVia   @default(manual)
+  granted_by      String
+  expires_at      DateTime?
+  revoked_at      DateTime?
+  status          GrantStatus @default(active)
+  created_at      DateTime   @default(now())
+
+  grantee  User?  @relation("Grantee", fields: [user_email], references: [email])
+  granter  User?  @relation("Granter", fields: [granted_by], references: [email])
+
+  @@map("PermissionGrant")
+  @@index([user_email])
+  @@index([resource_id, permission_id])
+  @@index([expires_at])
+}
+
+// ===== Todo（BB-06）=====
+
+model Todo {
+  id          String     @id @default(uuid())
+  owner_email String
+  source      String              // "cim-rms" / "cim-ims" / "cim-perm" ...
+  related_id  String?             // 对应业务记录 ID
+  title       String
+  label       TodoLabel
+  status      TodoStatus @default(open)
+  due_at      DateTime?
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+
+  owner User @relation(fields: [owner_email], references: [email], onDelete: Cascade)
+
+  @@map("Todo")
+  @@index([owner_email, status])
+}
+
+// ===== Notification（站内信）=====
+
+enum NotificationType {
+  auth_login         // 异地登录提醒
+  account_locked     // 账号被锁定
+  password_changed   // 密码被修改
+  role_assigned      // 角色被分配
+  role_revoked       // 角色被撤销
+  permission_granted  // 资源权限被授予
+  permission_revoked // 资源权限被撤销
+  system_alert       // 系统告警
+  incident_created   // 新事件创建（CIM-IMS）
+  request_submitted  // 新需求提交（CIM-RMS）
+  approval_needed    // 待审批提醒
+  sla_warning        // SLA 预警
+  sla_breach         // SLA 超时
+}
+
+model Notification {
+  id              String           @id @default(uuid())
+  recipient_email String
+  type            NotificationType
+  title           String
+  body            String?
+  metadata        Json?            // 跳转链接、关联 ID 等
+  read_at         DateTime?       // null = 未读
+  created_at      DateTime         @default(now())
+
+  recipient User? @relation("NotificationRecipient", fields: [recipient_email], references: [email])
+
+  @@map("Notification")
+  @@index([recipient_email, read_at])
+  @@index([recipient_email, created_at])
+  @@index([created_at])
+}
+
+// ===== Audit Log（只增不删）=====
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actor_email  String
+  actor_name   String
+  action       String              // "user.role.assign" / "permission.grant" ...
+  target_email String?
+  target_type String?             // "user" / "system" / "grant" ...
+  metadata     Json?
+  ip_address   String?
+  created_at   DateTime @default(now())
+
+  actor User? @relation(fields: [actor_email], references: [email])
+
+  @@map("AuditLog")
+  @@index([actor_email])
+  @@index([action])
+  @@index([target_email])
+  @@index([created_at])
+}
+
+// ===== Session（简化，不持久化 JWT 黑名单）=====
+
+model Session {
+  id           String   @id @default(uuid())
+  user_email   String
+  token_hash   String   @unique
+  expires_at   DateTime
+  ip_address   String?
+  user_agent   String?
+  created_at   DateTime @default(now())
+
+  user User @relation(fields: [user_email], references: [email], onDelete: Cascade)
+
+  @@map("Session")
+  @@index([user_email])
+  @@index([expires_at])
+}

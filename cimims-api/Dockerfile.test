@@ -1,0 +1,12 @@
+# Test Dockerfile that forces context to include dist
+FROM node:22-bullseye AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Test: list what's in the build context
+RUN echo "=== Testing build context ===" && ls -la /
+
+# Copy from absolute path in context
+COPY cimims-api/dist ./dist
+
+RUN echo "=== After COPY ===" && ls -la /app/dist/routes/ | head -5

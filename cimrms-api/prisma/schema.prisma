@@ -1,0 +1,300 @@
+// MRDI CIM-RMS — Prisma Schema
+// Database: PostgreSQL 16, Schema: cimrms
+// 所有表用软删除（deleted_at），审计表不删
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/cimrms-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== Enums =====
+
+enum RequestStatus {
+  submitted
+  pending_manager
+  manager_rejected
+  pool
+  scheduled
+  in_development
+  pending_uat
+  pending_deploy
+  deployed
+  pending_acceptance
+  closed
+}
+
+enum RequestType {
+  feature
+  config
+  report
+  integration
+  other
+}
+
+enum Urgency {
+  P1
+  P2
+  P3
+}
+
+enum EventType {
+  state_change
+  approval
+  rejection
+  comment
+  attachment
+  uat_result
+  deployment
+  escalation
+  sla_warning
+  assignment
+}
+
+enum ActorRole {
+  viewer
+  editor
+  auditor
+  admin
+  system
+}
+
+enum EscalationReason {
+  sla_50
+  sla_100
+  manual
+  rejected_loop
+}
+
+enum TodoStatus {
+  open
+  done
+  dismissed
+}
+
+enum TodoLabel {
+  red
+  green
+  blue
+}
+
+enum NotificationChannel {
+  in_app
+  email
+}
+
+enum NotificationStatus {
+  pending
+  sent
+  failed
+}
+
+// ===== Tables =====
+
+/// 需求主表
+model Request {
+  id                    String        @id @default(uuid()) @db.Uuid
+  requestNo             String        @unique @map("request_no") @db.VarChar(32)
+
+  title                 String        @db.VarChar(200)
+  type                  RequestType
+  urgency               Urgency
+  relatedSystem         String?       @map("related_system") @db.VarChar(50)
+  description           String        @db.Text
+  attachmentIds         String[]      @map("attachment_ids") @default([]) @db.Uuid
+  relatedIncidentId     String?       @map("related_incident_id") @db.VarChar(32)
+  expectedCompletion    DateTime?     @map("expected_completion") @db.Date
+
+  status                RequestStatus @default(submitted)
+  submitterEmail        String        @map("submitter_email") @db.VarChar(255)
+  submitterDept         String?       @map("submitter_dept") @db.VarChar(100)
+  assigneeEmail         String?       @map("assignee_email") @db.VarChar(255)
+  team                  String?       @db.VarChar(50)
+  estimatedDeployAt     DateTime?     @map("estimated_deploy_at") @db.Date
+
+  statusEnteredAt       DateTime      @default(now()) @map("status_entered_at") @db.Timestamptz
+  slaBreachAt           DateTime?     @map("sla_breach_at") @db.Timestamptz
+  closedAt              DateTime?     @map("closed_at") @db.Timestamptz
+  deletedAt             DateTime?     @map("deleted_at") @db.Timestamptz
+
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  events                RequestEvent[]
+  attachments           RequestAttachment[]
+  escalations           RequestEscalation[]
+  todos                 TodoItem[]
+
+  @@index([status])
+  @@index([urgency])
+  @@index([submitterEmail])
+  @@index([assigneeEmail])
+  @@index([team])
+  @@index([createdAt(sort: Desc)])
+  @@index([status, statusEnteredAt])
+  @@index([type, urgency, status])
+  @@map("request")
+}
+
+/// 流转历史
+model RequestEvent {
+  id              String     @id @default(uuid()) @db.Uuid
+  requestId       String     @map("request_id") @db.Uuid
+  eventType       EventType  @map("event_type")
+  fromStatus      RequestStatus? @map("from_status")
+  toStatus        RequestStatus? @map("to_status")
+  actorEmail      String     @map("actor_email") @db.VarChar(255)
+  actorRole       ActorRole  @map("actor_role")
+  comment         String?    @db.Text
+  metadata        Json?      @db.JsonB
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  request         Request    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt(sort: Desc)])
+  @@index([eventType])
+  @@index([actorEmail])
+  @@index([createdAt(sort: Desc)])
+  @@map("request_event")
+}
+
+/// 附件
+model RequestAttachment {
+  id              String   @id @default(uuid()) @db.Uuid
+  requestId       String   @map("request_id") @db.Uuid
+  filename        String   @db.VarChar(255)
+  mimeType        String   @map("mime_type") @db.VarChar(100)
+  sizeBytes       Int      @map("size_bytes")
+  storagePath     String   @map("storage_path") @db.VarChar(500)
+  uploadedBy      String   @map("uploaded_by") @db.VarChar(255)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  request         Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@map("request_attachment")
+}
+
+/// 升级记录
+model RequestEscalation {
+  id                       String           @id @default(uuid()) @db.Uuid
+  requestId                String           @map("request_id") @db.Uuid
+  fromStatus               RequestStatus    @map("from_status")
+  reason                   EscalationReason
+  escalatedAt              DateTime         @default(now()) @map("escalated_at") @db.Timestamptz
+  escalatedToEmail         String           @map("escalated_to_email") @db.VarChar(255)
+  originalAssigneeEmail    String?          @map("original_assignee_email") @db.VarChar(255)
+
+  request                  Request          @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([escalatedToEmail])
+  @@index([escalatedAt(sort: Desc)])
+  @@map("request_escalation")
+}
+
+/// 个人待办
+model TodoItem {
+  id              String     @id @default(uuid()) @db.Uuid
+  ownerEmail      String     @map("owner_email") @db.VarChar(255)
+  title           String     @db.VarChar(200)
+  description     String?    @db.Text
+  label           TodoLabel
+  status          TodoStatus @default(open)
+  relatedRequestId String?   @map("related_request_id") @db.Uuid
+  dueAt           DateTime?  @map("due_at") @db.Timestamptz
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  completedAt     DateTime?  @map("completed_at") @db.Timestamptz
+
+  relatedRequest  Request?   @relation(fields: [relatedRequestId], references: [id], onDelete: SetNull)
+
+  @@index([ownerEmail, status])
+  @@index([ownerEmail, label, status])
+  @@index([status, dueAt])
+  @@map("todo_item")
+}
+
+/// 通知发送日志
+model NotificationOutbox {
+  id              String              @id @default(uuid()) @db.Uuid
+  recipientEmail  String              @map("recipient_email") @db.VarChar(255)
+  channel         NotificationChannel
+  subject         String              @db.VarChar(200)
+  body            String              @db.Text
+  status          NotificationStatus  @default(pending)
+  attempts        Int                 @default(0)
+  lastError       String?             @map("last_error") @db.Text
+  sentAt          DateTime?           @map("sent_at") @db.Timestamptz
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  relatedRequestId String?            @map("related_request_id") @db.Uuid
+
+  @@index([status, createdAt])
+  @@index([recipientEmail])
+  @@index([relatedRequestId])
+  @@map("notification_outbox")
+}
+
+/// 个人通知规则
+model NotificationRule {
+  id                String   @id @default(uuid()) @db.Uuid
+  userEmail         String   @map("user_email") @db.VarChar(255)
+  eventType         String   @map("event_type") @db.VarChar(50)
+  inAppEnabled      Boolean  @default(true) @map("in_app_enabled")
+  emailEnabled      Boolean  @default(false) @map("email_enabled")
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@unique([userEmail, eventType])
+  @@index([userEmail])
+  @@map("notification_rule")
+}
+
+/// SLA 配置
+model SlaConfig {
+  id                          String   @id @default(uuid()) @db.Uuid
+  urgency                     Urgency  @unique
+  managerReviewHours          Int      @map("manager_review_hours")
+  poolEvaluationHours         Int      @map("pool_evaluation_hours")
+  developmentHours            Int      @map("development_hours")
+  deployHours                 Int      @map("deploy_hours")
+  acceptanceHours             Int      @map("acceptance_hours")
+  totalHours                  Int      @map("total_hours")
+  updatedBy                   String   @map("updated_by") @db.VarChar(255)
+  updatedAt                   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("sla_config")
+}
+
+/// 审计日志
+model AuditLog {
+  id              String     @id @default(uuid()) @db.Uuid
+  actorEmail      String     @map("actor_email") @db.VarChar(255)
+  actorRole       ActorRole  @map("actor_role")
+  action          String     @db.VarChar(100)
+  resourceType    String     @map("resource_type") @db.VarChar(50)
+  resourceId      String?    @map("resource_id") @db.VarChar(100)
+  requestId       String?    @map("request_id") @db.Uuid
+  ipAddress       String?    @map("ip_address") @db.VarChar(45)
+  userAgent       String?    @map("user_agent") @db.VarChar(500)
+  payload         Json?      @db.JsonB
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([actorEmail])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([requestId])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_log")
+}
+
+/// 业务编号计数器（request_no_seq）
+model RequestNoSeq {
+  year          Int      @id
+  prefix        String   @db.VarChar(8)
+  currentValue  Int      @default(0) @map("current_value")
+
+  @@map("request_no_seq")
+}

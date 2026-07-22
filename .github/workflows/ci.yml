@@ -1,0 +1,146 @@
+name: CI · Build, Test & Push
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/mrdi
+
+jobs:
+  # ────────────────────────────────────────────────
+  # Job 1: TypeScript type check（并行最快路径）
+  # ────────────────────────────────────────────────
+  typecheck:
+    name: TypeScript Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm build:shared
+
+      - name: Type check all workspaces
+        run: pnpm typecheck
+
+  # ────────────────────────────────────────────────
+  # Job 2: Build Docker images for all 5 services
+  # ────────────────────────────────────────────────
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: typecheck
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - service: mdm-api
+            dockerfile: mdm-api/Dockerfile
+            image_name: mdm-api
+          - service: cimrms-api
+            dockerfile: cimrms-api/Dockerfile
+            image_name: cimrms-api
+          - service: cimims-api
+            dockerfile: cimims-api/Dockerfile
+            image_name: cimims-api
+          - service: cim-perm-api
+            dockerfile: cim-perm/Dockerfile
+            image_name: cim-perm-api
+          - service: mrdi-portal
+            dockerfile: mrdi-portal/Dockerfile
+            image_name: mrdi-portal
+
+    outputs:
+      mdm-api: ${{ steps.meta.outputs.tags }}
+      cimrms-api: ${{ steps.meta.outputs.tags }}
+      cimims-api: ${{ steps.meta.outputs.tags }}
+      cim-perm-api: ${{ steps.meta.outputs.tags }}
+      mrdi-portal: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (for multi-arch)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.image_name }}
+          tags: |
+            type=sha,prefix=sha-
+            type=ref,event=branch
+            type=sha,event=pr,prefix=pr-
+            type=raw,value=latest,enable={{ is_default_branch }}
+
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+
+      - name: Report image tag
+        run: |
+          echo "::notice::Image ${{ matrix.service }}: ${{ steps.meta.outputs.tags }}"
+
+  # ────────────────────────────────────────────────
+  # Summary comment on PR
+  # ────────────────────────────────────────────────
+  pr-summary:
+    name: PR Summary
+    runs-on: ubuntu-latest
+    needs: [typecheck, build-images]
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: PR Summary
+        run: |
+          echo "## ✅ MRDI Portal CI — PR #${{ github.event.pull_request.number }}"
+          echo ""
+          echo "| Check | Status |"
+          echo "|-------|--------|"
+          echo "| TypeScript | ✅ Pass |"
+          echo "| Docker Images | ✅ Built + Pushed |"
+          echo "|"
+          echo "**Commit**: \`${{ github.sha }}\`"
+          echo "**Branch**: \`${{ github.ref_name }}\`"

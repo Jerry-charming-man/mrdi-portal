@@ -1,0 +1,137 @@
+{
+  "nav": {
+    "dashboard": "總覽 Dashboard",
+    "notifications": "通知中心",
+    "cimrms": "CIM-RMS",
+    "cimims": "CIM-IMS",
+    "perm": "權限申請",
+    "mdm": "MDM 主數據",
+    "spc": "SPC 趨勢",
+    "alarms": "告警中心",
+    "handover": "班次交接"
+  },
+  "header": {
+    "home": "首頁",
+    "unknownPage": "未知頁面",
+    "shift": {
+      "morning": "早班",
+      "afternoon": "中班",
+      "night": "夜班"
+    },
+    "now": "現在",
+    "search": "搜 Lot / 設備 / Recipe / 工單…  ⌘K",
+    "quickActions": "快速操作",
+    "quickActionsHint": "Lot 暫停",
+    "equipmentCheck": "設備點名",
+    "reportRepair": "一鍵報修",
+    "notifySupervisor": "通知值班長",
+    "settings": "設置",
+    "notifications": "通知"
+  },
+  "sidebar": {
+    "section": {
+      "overview": "運營總覽",
+      "business": "業務子系統",
+      "production": "生產運營"
+    },
+    "plant": "Plant",
+    "plantName": "Fab-1 · MEC",
+    "sprint": "Sprint",
+    "spcPlanned": "SPC 趨勢在 Sprint 3 上線",
+    "handoverPlanned": "班次交接在 Sprint 2 上線"
+  },
+  "userMenu": {
+    "switchTheme": "切換主題",
+    "accountSettings": "賬號設置",
+    "logout": "退出登錄",
+    "loggedOut": "已退出登錄",
+    "role": {
+      "admin": "管理員",
+      "auditor": "審計員",
+      "editor": "編輯",
+      "viewer": "訪客"
+    }
+  },
+  "login": {
+    "title": "MRDI Smart Portal",
+    "subtitle": "主數據與智能製造管理平台",
+    "m365Login": "使用 Microsoft 賬號登錄",
+    "or": "或",
+    "showPasswordLogin": "使用賬號密碼登錄",
+    "hidePasswordLogin": "收起賬號密碼登錄",
+    "email": "郵箱",
+    "password": "密碼",
+    "login": "登錄",
+    "loginFailed": "登錄失敗",
+    "m365Failed": "M365 登錄失敗",
+    "m365AuthFailed": "M365 授權失敗",
+    "enterCredentials": "請輸入賬號和密碼",
+    "devHint": "測試賬號：jerry.sun@mrdi.org.hk / Jerry1234!"
+  },
+  "theme": {
+    "switchToLight": "已切換至淺色模式",
+    "switchToDark": "已切換至深色模式"
+  },
+  "shift": {
+    "morning": "早班",
+    "afternoon": "中班",
+    "night": "夜班",
+    "morningRange": "08:00–16:00",
+    "afternoonRange": "16:00–00:00",
+    "nightRange": "00:00–08:00"
+  },
+  "notifications": {
+    "title": "通知中心",
+    "markAllRead": "全部標記為已讀",
+    "empty": "暫無通知",
+    "loadMore": "載入更多"
+  },
+  "profile": {
+    "title": "個人資料",
+    "changePassword": "修改密碼",
+    "logout": "退出登錄"
+  },
+  "common": {
+    "save": "儲存",
+    "cancel": "取消",
+    "confirm": "確認",
+    "delete": "刪除",
+    "edit": "編輯",
+    "add": "新增",
+    "search": "搜尋",
+    "loading": "載入中…",
+    "noData": "暫無數據",
+    "success": "操作成功",
+    "error": "操作失敗",
+    "confirmDelete": "確認刪除？",
+    "yes": "是",
+    "no": "否"
+  },
+  "validation": {
+    "error": "參數校驗失敗",
+    "required": "此欄位必填",
+    "invalid_type": "類型錯誤",
+    "invalid_string": "格式不正確",
+    "invalid_email": "郵箱格式不正確",
+    "string_too_short": "長度不足，最少 {{count}} 個字符",
+    "string_too_long": "長度超出，最多 {{count}} 個字符",
+    "too_small": "數值過小，最小為 {{minimum}}",
+    "too_big": "數值過大，最大為 {{maximum}}",
+    "enum": "無效的選擇值",
+    "custom": "校驗失敗"
+  },
+  "error": {
+    "not_found": "資源不存在",
+    "forbidden": "權限不足",
+    "unauthorized": "未登錄或登錄已過期",
+    "validation": "參數校驗失敗",
+    "invalid_state_transition": "狀態變更不允許",
+    "conflict": "操作衝突",
+    "internal": "服務器內部錯誤",
+    "http_error": "請求失敗",
+    "service_unavailable": "依賴服務不可用",
+    "network_error": "網絡連接失敗",
+    "timeout": "請求超時",
+    "unknown": "未知錯誤"
+  }
+}

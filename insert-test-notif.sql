@@ -1,0 +1,1 @@
+INSERT INTO mdm."Notification" (id, recipient_email, type, title, body, metadata, created_at) VALUES ('test-0000-0000-0000-000000000001', 'jerry.sun@mrdi.org.hk', 'incident_created', 'Test IMS Notification', 'Test body', '{}'::jsonb, NOW());
