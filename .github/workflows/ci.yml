@@ -121,9 +121,8 @@ jobs:
           platforms: linux/amd64
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
-          # Local cache — unique per run, avoids cross-build GHA cache corruption
-          cache-from: type=local,src=/tmp/mavis-bx-in-{{ github.run_id }}
-          cache-to: type=local,dest=/tmp/mavis-bx-out-{{ github.run_id }}
+          # No layer cache at all — fresh build every run (avoids stale GHA cache)
+          no-cache: true
           build-args: |
             COMMIT_SHA=${{ github.sha }}
 
