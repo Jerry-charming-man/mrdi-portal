@@ -24,15 +24,12 @@ COPY mdm-api/prisma ./mdm-api/prisma/
 # 3. Install all deps (workspace:* resolved to local packages)
 RUN pnpm install
 
-# 3b. Copy @prisma/client from workspace package to monorepo root
-# (runtime stage needs it at /app/node_modules/@prisma/client, but pnpm installs it inside mdm-api/)
-RUN cp -r mdm-api/node_modules/@prisma ./node_modules/@prisma 2>/dev/null || true
-
 # 4. Build @mrdi/shared first (use pnpm exec for reliable bin path resolution)
 RUN pnpm exec tsc -p packages/shared/tsconfig.json
 
-# 5. Generate Prisma client for mdm-api (standard @prisma/client, no custom name)
-RUN pnpm --filter mdm-api db:generate
+# 5. Generate Prisma client for mdm-api
+# pnpm hoists @prisma/client to monorepo root, so prisma binary is at /app/node_modules/.bin/prisma
+RUN pnpm exec prisma generate --schema mdm-api/prisma/schema.prisma
 
 # 6. Build mdm-api
 RUN pnpm --filter mdm-api build
@@ -40,12 +37,14 @@ RUN pnpm --filter mdm-api build
 # ── Runtime stage ────────────────────────────────────────────
 FROM node:22-bullseye AS runner
 WORKDIR /app
-ENV NODE_ENV=development
+ENV NODE_ENV=production
+
+# Copy entire mdm-api node_modules (contains both @prisma/client npm pkg + .prisma generated)
+COPY --from=builder /app/mdm-api/node_modules ./node_modules
 
 # Copy built artifacts from builder
 COPY --from=builder /app/mdm-api/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 # Write standalone package.json for @mrdi/shared (no workspace: protocol)
 RUN echo '{"name":"@mrdi/shared","version":"1.0.0","type":"module","main":"./dist/index.js","exports":{".":{"import":"./dist/index.js"},"*":"./dist/*"}}' > ./packages/shared/package.json

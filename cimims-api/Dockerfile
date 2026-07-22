@@ -26,8 +26,8 @@ RUN pnpm install
 # 4. Build @mrdi/shared first (use pnpm exec tsc for reliable build)
 RUN pnpm exec tsc -p packages/shared/tsconfig.json
 
-# 5. Generate Prisma client for cimims (standard @prisma/client, no custom name)
-RUN pnpm --filter cimims-api db:generate
+# 5. Generate Prisma client for cimims
+RUN pnpm exec prisma generate --schema cimims-api/prisma/schema.prisma
 
 # 6. Build cimims-api
 RUN pnpm --filter cimims-api build
@@ -35,12 +35,14 @@ RUN pnpm --filter cimims-api build
 # ── Runtime stage ────────────────────────────────────────────
 FROM node:22-bullseye AS runner
 WORKDIR /app
-ENV NODE_ENV=development
+ENV NODE_ENV=production
+
+# Copy node_modules from builder (includes Prisma generated client)
+COPY --from=builder /app/cimims-api/node_modules ./node_modules
 
 # Copy built artifacts from builder
 COPY --from=builder /app/cimims-api/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 # Write standalone package.json for @mrdi/shared (no workspace: protocol)
 RUN echo '{"name":"@mrdi/shared","version":"1.0.0","type":"module","main":"./dist/index.js","exports":{".":{"import":"./dist/index.js"},"*":"./dist/*"}}' > ./packages/shared/package.json

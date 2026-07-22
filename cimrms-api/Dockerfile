@@ -41,21 +41,23 @@ RUN pnpm --filter cimrms-api build
 # ── Runtime stage ────────────────────────────────────────────
 FROM node:22-bullseye AS runner
 WORKDIR /app
-ENV NODE_ENV=development
+ENV NODE_ENV=production
+
+# Copy node_modules from builder (includes Prisma generated client)
+COPY --from=builder /app/cimrms-api/node_modules ./node_modules
 
 # Copy built artifacts from builder
 COPY --from=builder /app/cimrms-api/dist ./dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=builder /app/packages/teams-notify/dist ./packages/teams-notify/dist 2>/dev/null || true
 
-# Write minimal package.json for @mrdi/shared (no workspace protocol)
+# Write standalone package.json for @mrdi/shared (no workspace protocol)
 RUN echo '{"name":"@mrdi/shared","version":"1.0.0","type":"module","main":"./dist/index.js","exports":{".":{"import":"./dist/index.js"},"*":"./dist/*"}}' > ./packages/shared/package.json
 
 # Write standalone package.json for cimrms-api (prisma in deps)
 RUN echo '{"name":"cimrms-api","version":"1.0.0","type":"module","dependencies":{"@fastify/cors":"^9.0.1","@fastify/jwt":"^8.0.1","@fastify/swagger":"^8.0.0","@fastify/swagger-ui":"^4.0.0","@fastify/websocket":"^10.0.0","@mrdi/shared":"file:./packages/shared","@prisma/client":"5.22.0","fastify":"^4.28.0","fastify-plugin":"^4.5.1","http-errors":"^2.0.1","pino":"^9.4.0","pino-pretty":"^11.2.0","prisma":"5.22.0","zod":"^3.23.8"}}' > ./package.json
 
-# Install runtime deps only
+# Install runtime deps only (fills in any missing transitive deps)
 RUN npm install --legacy-peer-deps --omit=dev 2>&1 | tail -3
 
 # Verify PrismaClient
