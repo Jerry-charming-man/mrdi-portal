@@ -21,8 +21,11 @@ Thumbs.db
 
 # Exclude design docs (not needed in Docker)
 **/*.md
-**/*.html
 **/visual-assets/
+
+# mrdi-portal/dist/ is built inside Docker by the builder stage
+# but in case it exists from a local build, ensure it's available
+!mrdi-portal/dist/
 
 # Exclude scripts (not needed in Docker)
 scripts/
