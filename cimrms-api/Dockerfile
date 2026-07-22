@@ -42,7 +42,7 @@ RUN pnpm --filter cimrms-api build
 # ── Runtime stage ────────────────────────────────────────────
 FROM node:22-bullseye AS runner
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 
 # Copy node_modules from builder (flat with shamefully-hoist=true)
 COPY --from=builder /app/node_modules ./node_modules
@@ -58,10 +58,7 @@ RUN echo '{"name":"@mrdi/shared","version":"1.0.0","type":"module","main":"./dis
 # Write standalone package.json for cimrms-api (prisma in deps)
 RUN echo '{"name":"cimrms-api","version":"1.0.0","type":"module","dependencies":{"@fastify/cors":"^9.0.1","@fastify/jwt":"^8.0.1","@fastify/swagger":"^8.0.0","@fastify/swagger-ui":"^4.0.0","@fastify/websocket":"^10.0.0","@mrdi/shared":"file:./packages/shared","@prisma/client":"5.22.0","fastify":"^4.28.0","fastify-plugin":"^4.5.1","http-errors":"^2.0.1","pino":"^9.4.0","pino-pretty":"^11.2.0","prisma":"5.22.0","zod":"^3.23.8"}}' > ./package.json
 
-# Install runtime deps only (fills in any missing transitive deps)
-RUN npm install --legacy-peer-deps --omit=dev 2>&1 | tail -3
-
-# Verify PrismaClient
+# Verify PrismaClient loads
 RUN node -e "const{PrismaClient}=require('@prisma/client');console.log('PrismaClient OK:',typeof PrismaClient)"
 
 EXPOSE 3001

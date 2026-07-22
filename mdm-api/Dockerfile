@@ -38,10 +38,10 @@ RUN pnpm --filter mdm-api build
 # ── Runtime stage ────────────────────────────────────────────
 FROM node:22-bullseye AS runner
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 
-# Copy entire mdm-api node_modules (contains both @prisma/client npm pkg + .prisma generated)
-COPY --from=builder /app/mdm-api/node_modules ./node_modules
+# Copy node_modules from builder (flat with shamefully-hoist=true)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built artifacts from builder
 COPY --from=builder /app/mdm-api/dist ./dist
@@ -50,13 +50,10 @@ COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 # Write standalone package.json for @mrdi/shared (no workspace: protocol)
 RUN echo '{"name":"@mrdi/shared","version":"1.0.0","type":"module","main":"./dist/index.js","exports":{".":{"import":"./dist/index.js"},"*":"./dist/*"}}' > ./packages/shared/package.json
 
-# Write standalone package.json for mdm-api (prisma in deps for runtime)
+# Write standalone package.json for mdm-api
 RUN echo '{"name":"mdm-api","version":"1.0.0","type":"module","dependencies":{"@fastify/cors":"^9.0.1","@fastify/jwt":"^8.0.1","@fastify/swagger":"^8.0.0","@fastify/swagger-ui":"^4.0.0","@mrdi/shared":"file:./packages/shared","@prisma/client":"^5.22.0","bcryptjs":"^2.4.3","bullmq":"^5.30.0","fastify":"^4.28.0","fastify-plugin":"^4.5.1","http-errors":"^2.0.1","ioredis":"^5.4.1","pino":"^9.4.0","pino-pretty":"^11.2.0","zod":"^3.23.8"}}' > ./package.json
 
-# Install runtime deps only
-RUN npm install --legacy-peer-deps --omit=dev 2>&1 | tail -3
-
-# Verify PrismaClient
+# Verify PrismaClient loads
 RUN node -e "const{PrismaClient}=require('@prisma/client');console.log('PrismaClient OK:',typeof PrismaClient)"
 
 EXPOSE 3000
