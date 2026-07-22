@@ -121,8 +121,9 @@ jobs:
           platforms: linux/amd64
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
-          # No Docker layer cache — builds are fresh every time
-          # (previous cache-from caused stale layer errors with monorepo paths)
+          # No Docker layer cache at all — fresh build every time
+          cache-from: type=gha,mode=disabled
+          cache-to: type=gha,mode=disabled
           build-args: |
             COMMIT_SHA=${{ github.sha }}
 
