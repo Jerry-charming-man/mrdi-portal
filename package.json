@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "description": "MRDI Portal monorepo — mrdi-mdm + cim-rms + cim-ims + cim-perm + portal",
-  "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
