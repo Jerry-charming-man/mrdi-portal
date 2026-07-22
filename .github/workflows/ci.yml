@@ -116,8 +116,8 @@ jobs:
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.service == 'mrdi-portal' && './mrdi-portal' || '.' }}
-          file: ${{ matrix.service == 'mrdi-portal' && 'Dockerfile' || matrix.dockerfile }}
+          context: .
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
