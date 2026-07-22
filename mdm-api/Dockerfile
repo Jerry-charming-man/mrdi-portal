@@ -5,7 +5,7 @@
 # ============================================================
 FROM node:22-bullseye AS builder
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 
 # 1. Install pnpm globally
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
@@ -33,7 +33,7 @@ RUN pnpm --filter mdm-api build
 # ── Runtime stage ────────────────────────────────────────────
 FROM node:22-bullseye AS runner
 WORKDIR /app
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 
 # Copy built artifacts from builder
 COPY --from=builder /app/mdm-api/dist ./dist
