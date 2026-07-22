@@ -21,7 +21,8 @@ COPY cimims-api/tsconfig.json ./cimims-api/
 COPY cimims-api/prisma ./cimims-api/prisma/
 
 # 3. Install all deps
-RUN pnpm install
+# shamefully-hoist=true: flat node_modules so COPY to runtime works
+RUN pnpm install --shamefully-hoist=true
 
 # 4. Build @mrdi/shared first (use pnpm exec tsc for reliable build)
 RUN pnpm exec tsc -p packages/shared/tsconfig.json
@@ -37,8 +38,8 @@ FROM node:22-bullseye AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Copy node_modules from builder (includes Prisma generated client)
-COPY --from=builder /app/cimims-api/node_modules ./node_modules
+# Copy node_modules from builder (flat with shamefully-hoist=true)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built artifacts from builder
 COPY --from=builder /app/cimims-api/dist ./dist

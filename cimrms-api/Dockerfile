@@ -24,7 +24,8 @@ COPY cimrms-api/src ./cimrms-api/src/
 COPY cimrms-api/prisma ./cimrms-api/prisma/
 
 # 3. Install all deps (no workspace protocol — use actual installed packages)
-RUN pnpm install
+# shamefully-hoist=true: flat node_modules so COPY to runtime works
+RUN pnpm install --shamefully-hoist=true
 
 # 4. Build shared packages first (use pnpm exec for reliable bin path resolution)
 RUN pnpm exec tsc -p packages/shared/tsconfig.json
@@ -43,8 +44,8 @@ FROM node:22-bullseye AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Copy node_modules from builder (includes Prisma generated client)
-COPY --from=builder /app/cimrms-api/node_modules ./node_modules
+# Copy node_modules from builder (flat with shamefully-hoist=true)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built artifacts from builder
 COPY --from=builder /app/cimrms-api/dist ./dist

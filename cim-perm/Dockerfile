@@ -21,7 +21,8 @@ COPY cim-perm/tsconfig.json ./cim-perm/
 COPY cim-perm/src ./cim-perm/src/
 
 # 3. Install all deps
-RUN pnpm install
+# shamefully-hoist=true: flat node_modules so COPY to runtime works
+RUN pnpm install --shamefully-hoist=true
 
 # 4. Build @mrdi/shared first (use pnpm exec tsc for reliable build)
 RUN pnpm exec tsc -p packages/shared/tsconfig.json

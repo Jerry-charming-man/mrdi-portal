@@ -22,7 +22,8 @@ COPY mdm-api/src ./mdm-api/src/
 COPY mdm-api/prisma ./mdm-api/prisma/
 
 # 3. Install all deps (workspace:* resolved to local packages)
-RUN pnpm install
+# shamefully-hoist=true: flat node_modules so COPY to runtime works
+RUN pnpm install --shamefully-hoist=true
 
 # 4. Build @mrdi/shared first (use pnpm exec for reliable bin path resolution)
 RUN pnpm exec tsc -p packages/shared/tsconfig.json
