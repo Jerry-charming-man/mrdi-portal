@@ -1,5 +1,8 @@
 # MRDI Portal Monorepo
 
+[![CI](https://github.com/Jerry-charming-man/mrdi-portal/actions/workflows/ci.yml/badge.svg)](https://github.com/Jerry-charming-man/mrdi-portal/actions)
+[![CD](https://github.com/Jerry-charming-man/mrdi-portal/actions/workflows/cd.yml/badge.svg)](https://github.com/Jerry-charming-man/mrdi-portal/actions)
+
 > 5 个业务系统的统一工作区，v1.0 GA（2026-07-21）。
 
 ## 系统架构
@@ -75,6 +78,16 @@ pnpm dev:cimims   # → localhost:3002
 pnper dev:cimperm  # → localhost:3003
 ```
 
+## CI/CD
+
+| 环境 | 触发 | 结果 |
+|------|------|------|
+| GitHub Actions `ci.yml` | PR / push to main | TypeScript check + Docker build 5 镜像 + push ghcr.io |
+| GitHub Actions `cd.yml` | push to main | webhook → vm-jerry-dev-01 自动部署 |
+
+**镜像**：`ghcr.io/Jerry-charming-man/mrdi/<service>:sha-<commit>`
+**文档**：[`docs/Sprint5/KANBAN.md`](./docs/Sprint5/KANBAN.md) · [`.github/README.md`](./.github/README.md)
+
 ## Sprint 路线图
 
 | Sprint | 时间 | 主题 | 状态 |
@@ -83,6 +96,7 @@ pnper dev:cimperm  # → localhost:3003
 | Sprint 2 | 07-17 ~ 07-20 | M365 OAuth mock + RBAC + bcrypt + Profile | ✅ 完成 |
 | Sprint 3 | 07-17 ~ 07-20 | WebSocket 实时推送 + 通知 BullMQ + Admin UI | ✅ 完成 |
 | Sprint 4 | 07-20 ~ 07-21 | i18n + 审计聚合 + SQL 优化 + k6 压测 + OpenAPI types | ✅ 完成 |
+| Sprint 5 | 07-22 ~ | CI/CD pipeline + GitHub Actions + ghcr.io 镜像 | 🔄 进行中 |
 | **v1.0 GA** | **2026-07-21** | **全系统上线** | **✅** |
 
 ## Sprint 4 完成清单
