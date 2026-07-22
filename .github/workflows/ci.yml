@@ -118,10 +118,12 @@ jobs:
             type=sha,event=pr,prefix=pr-
             type=raw,value=latest,enable={{ is_default_branch }}
 
-      - name: Prune ALL Docker build caches before each build
+      - name: Reset Docker buildx state before each build
         run: |
-          docker buildx prune --all --force
-          docker builder prune --force || true
+          docker buildx prune --all --force || true
+          docker buildx rm -f builder || true
+          docker buildx create --driver docker-container --name builder --use
+          docker buildx inspect builder --bootstrap
 
       - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v6
@@ -131,6 +133,7 @@ jobs:
           platforms: linux/amd64
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
+          no-cache: true
           build-args: |
             COMMIT_SHA=${{ github.sha }}
             PNPM_VERSION=9.0.0
