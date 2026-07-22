@@ -133,6 +133,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
             COMMIT_SHA=${{ github.sha }}
+            PNPM_VERSION=9.0.0
 
       - name: Report image tag
         run: |

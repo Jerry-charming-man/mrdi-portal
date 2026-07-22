@@ -4,7 +4,7 @@ FROM node:24-alpine AS builder
 WORKDIR /app
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION:-9.0.0} --activate
 
 # Copy monorepo source (entire repo so workspace deps resolve)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -12,7 +12,7 @@ COPY packages packages/
 COPY mrdi-portal mrdi-portal/
 
 # Install all dependencies (workspace links)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # Build shared + ui (needed by mrdi-portal)
 RUN pnpm --filter @mrdi/shared build

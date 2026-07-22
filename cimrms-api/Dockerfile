@@ -8,26 +8,29 @@ WORKDIR /app
 ENV NODE_ENV=development
 
 # 1. Install pnpm globally
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION:-9.0.0} --activate
 
 # 2. Copy monorepo package files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/shared/src ./packages/shared/src/
+COPY packages/shared/tsconfig.json ./packages/shared/tsconfig.json
+COPY tsconfig.base.json ./tsconfig.base.json
 COPY packages/teams-notify/package.json ./packages/teams-notify/
 COPY packages/teams-notify/src ./packages/teams-notify/src/
-COPY packages/shared/src ./packages/shared/src/
 COPY cimrms-api/package.json ./cimrms-api/
 COPY cimrms-api/tsconfig.json ./cimrms-api/
+COPY cimrms-api/src ./cimrms-api/src/
 COPY cimrms-api/prisma ./cimrms-api/prisma/
 
 # 3. Install all deps (no workspace protocol — use actual installed packages)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
-# 4. Build shared packages first
-RUN pnpm --filter @mrdi/shared build
+# 4. Build shared packages first (use pnpm exec for reliable bin path resolution)
+RUN pnpm exec tsc -p packages/shared/tsconfig.json
 
-# 5. Build teams-notify (no separate workspace package — it lives in packages/teams-notify-sdk)
-RUN pnpm --filter @mrdi/teams-notify build 2>/dev/null || true
+# 5. Build teams-notify
+RUN pnpm exec tsc -p packages/teams-notify/tsconfig.json 2>/dev/null || true
 
 # 6. Generate Prisma client for cimrms
 RUN pnpm --filter cimrms-api exec prisma generate

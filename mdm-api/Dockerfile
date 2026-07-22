@@ -8,21 +8,28 @@ WORKDIR /app
 ENV NODE_ENV=development
 
 # 1. Install pnpm globally
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION:-9.0.0} --activate
 
 # 2. Copy monorepo package files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/shared/src ./packages/shared/src/
+COPY packages/shared/tsconfig.json ./packages/shared/tsconfig.json
+COPY tsconfig.base.json ./tsconfig.base.json
 COPY mdm-api/package.json ./mdm-api/
 COPY mdm-api/tsconfig.json ./mdm-api/
+COPY mdm-api/src ./mdm-api/src/
 COPY mdm-api/prisma ./mdm-api/prisma/
 
 # 3. Install all deps (workspace:* resolved to local packages)
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
-# 4. Build @mrdi/shared first
-RUN pnpm --filter @mrdi/shared build
+# 3b. Copy @prisma/client from workspace package to monorepo root
+# (runtime stage needs it at /app/node_modules/@prisma/client, but pnpm installs it inside mdm-api/)
+RUN cp -r mdm-api/node_modules/@prisma ./node_modules/@prisma 2>/dev/null || true
+
+# 4. Build @mrdi/shared first (use pnpm exec for reliable bin path resolution)
+RUN pnpm exec tsc -p packages/shared/tsconfig.json
 
 # 5. Generate Prisma client for mdm-api (standard @prisma/client, no custom name)
 RUN pnpm --filter mdm-api db:generate

@@ -8,7 +8,7 @@ WORKDIR /app
 ENV NODE_ENV=development
 
 # 1. Install pnpm globally
-RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
+RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION:-9.0.0} --activate
 
 # 2. Copy monorepo package files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -19,7 +19,7 @@ COPY cimims-api/tsconfig.json ./cimims-api/
 COPY cimims-api/prisma ./cimims-api/prisma/
 
 # 3. Install all deps
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # 4. Build @mrdi/shared first
 RUN pnpm --filter @mrdi/shared build
